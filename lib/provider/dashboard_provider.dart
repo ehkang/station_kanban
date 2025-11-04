@@ -18,6 +18,10 @@ class DashboardProvider extends ChangeNotifier {
   final List<String> _logs = [];
   bool _isConnected = false;
 
+  // 日志配置：限制最大日志数量，防止内存暴增
+  // 100条日志约占用 20-30KB 内存（每条平均100字符）
+  static const int _maxLogCount = 100;
+
   DashboardProvider(this._signalRService) {
     _initSignalR();
   }
@@ -42,7 +46,6 @@ class DashboardProvider extends ChangeNotifier {
     // 监听连接状态
     _signalRService.connectionState.listen((state) {
       _isConnected = state == HubConnectionState.Connected;
-      _addLog('连接状态: ${_getConnectionStateName(state)}');
       notifyListeners();
     });
 
@@ -50,11 +53,15 @@ class DashboardProvider extends ChangeNotifier {
     _signalRService.deviceUpdates.listen((event) {
       updateDevice(event.deviceNo, event.data);
     });
+    
+    // 监听服务器推送的日志
+    // 对应 Vue 项目中的: signalRConnection.on("logger", ...)
+    _signalRService.logs.listen((logEvent) {
+      _addLog(logEvent.message);
+    });
 
     // 启动连接
-    _signalRService.connect().catchError((error) {
-      _addLog('SignalR 连接失败: $error');
-    });
+    _signalRService.connect();
   }
 
   /// 更新设备数据
@@ -87,14 +94,12 @@ class DashboardProvider extends ChangeNotifier {
       final device = Device.fromJson(mappedInfo);
 
       _devices[deviceNo] = device;
-      _addLog('设备更新: $deviceNo');
 
       // 更新托盘映射
       _updateDeviceTrayMap();
 
       notifyListeners();
     } catch (e) {
-      _addLog('更新设备失败: $e');
       // 打印详细错误信息用于调试
       print('设备数据解析错误: $e');
       print('原始数据: $newInfo');
@@ -199,8 +204,6 @@ class DashboardProvider extends ChangeNotifier {
         for (int i = 1; i < deviceCodes.length; i++) {
           _deviceTrayMap.remove(deviceCodes[i]);
         }
-
-        _addLog('托盘去重: $containerCode 保留在 $keepDevice');
       }
     }
   }
@@ -220,31 +223,27 @@ class DashboardProvider extends ChangeNotifier {
     return 0;
   }
 
-  /// 添加日志
+  /// 添加日志（仅用于接收服务器推送的日志）
+  ///
+  /// 内存管理策略：
+  /// - 限制最大日志数量为 _maxLogCount (100条)
+  /// - 超过限制时删除最旧的日志（FIFO策略）
+  /// - 每条日志平均100字符，100条约占用20-30KB内存
+  /// - 使用 removeRange 批量删除，性能优于逐条删除
   void _addLog(String message) {
     final timestamp = DateTime.now().toString().substring(11, 19);
-    _logs.insert(0, '[$timestamp] $message');
+    _logs.add('[$timestamp] $message'); // 添加到末尾，最新的在下面
 
-    // 只保留最近 100 条日志
-    if (_logs.length > 100) {
-      _logs.removeRange(100, _logs.length);
+    // 内存控制：只保留最近 _maxLogCount 条日志，删除旧的
+    // 使用批量删除，避免频繁的内存分配/释放
+    if (_logs.length > _maxLogCount) {
+      // 一次性删除多余的旧日志
+      final removeCount = _logs.length - _maxLogCount;
+      _logs.removeRange(0, removeCount);
     }
-  }
 
-  /// 获取连接状态名称
-  String _getConnectionStateName(HubConnectionState state) {
-    switch (state) {
-      case HubConnectionState.Connected:
-        return '已连接';
-      case HubConnectionState.Connecting:
-        return '连接中';
-      case HubConnectionState.Reconnecting:
-        return '重连中';
-      case HubConnectionState.Disconnecting:
-        return '断开中';
-      case HubConnectionState.Disconnected:
-        return '已断开';
-    }
+    // 通知 UI 更新
+    notifyListeners();
   }
 
   @override

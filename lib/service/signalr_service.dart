@@ -15,6 +15,10 @@ class SignalRService {
   final _deviceUpdateController = StreamController<DeviceUpdateEvent>.broadcast();
   Stream<DeviceUpdateEvent> get deviceUpdates => _deviceUpdateController.stream;
 
+  /// 日志推送流
+  final _logController = StreamController<LogEvent>.broadcast();
+  Stream<LogEvent> get logs => _logController.stream;
+
   /// 初始化 SignalR 连接
   Future<void> connect() async {
     // 创建连接
@@ -45,6 +49,10 @@ class SignalRService {
     // 对应 Vue 项目中的: signalRConnection.on("DeviceDataUpdate", ...)
     _hubConnection?.on('DeviceDataUpdate', _handleDeviceUpdate);
 
+    // 注册日志推送监听
+    // 对应 Vue 项目中的: signalRConnection.on("logger", ...)
+    _hubConnection?.on('logger', _handleLogPush);
+
     try {
       // 启动连接
       await _hubConnection?.start();
@@ -72,6 +80,23 @@ class SignalRService {
     }
   }
 
+  /// 处理日志推送
+  /// 对应 Vue 中的 logger 事件处理
+  void _handleLogPush(List<Object?>? arguments) {
+    if (arguments == null || arguments.isEmpty) return;
+
+    final logData = arguments[0] as Map<String, dynamic>?;
+    if (logData != null) {
+      _logController.add(
+        LogEvent(
+          logLevel: logData['logLevel'] as int? ?? 2,
+          message: logData['message'] as String? ?? '',
+          categoryName: logData['categoryName'] as String? ?? '系统',
+        ),
+      );
+    }
+  }
+
   /// 断开连接
   Future<void> disconnect() async {
     await _hubConnection?.stop();
@@ -83,6 +108,7 @@ class SignalRService {
     _hubConnection?.stop();
     _connectionStateController.close();
     _deviceUpdateController.close();
+    _logController.close();
   }
 }
 
@@ -94,5 +120,24 @@ class DeviceUpdateEvent {
   DeviceUpdateEvent({
     required this.deviceNo,
     required this.data,
+  });
+}
+
+/// 日志事件
+/// 对应 Vue 中的 logger 事件数据结构
+class LogEvent {
+  /// 日志级别: 2=info, 3=warning, 4=error
+  final int logLevel;
+
+  /// 日志消息内容（服务器推送的原始消息）
+  final String message;
+
+  /// 日志分类（如 'WCS.Connection', 'WMS.System' 等）
+  final String categoryName;
+
+  LogEvent({
+    required this.logLevel,
+    required this.message,
+    required this.categoryName,
   });
 }

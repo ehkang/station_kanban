@@ -13,6 +13,7 @@ class LogPanel extends ConsumerStatefulWidget {
 
 class _LogPanelState extends ConsumerState<LogPanel> {
   final ScrollController _scrollController = ScrollController();
+  int _previousLogCount = 0;
 
   @override
   void dispose() {
@@ -20,21 +21,29 @@ class _LogPanelState extends ConsumerState<LogPanel> {
     super.dispose();
   }
 
+  /// 自动滚动到底部（只在日志数量增加时触发）
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = ref.watch(dashboardProvider);
     final logs = provider.logs;
 
-    // 当有新日志时，自动滚动到顶部
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    // 只在日志数量增加时自动滚动到底部
+    if (logs.length > _previousLogCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+      });
+      _previousLogCount = logs.length;
+    }
 
     return Container(
       decoration: BoxDecoration(

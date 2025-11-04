@@ -33,65 +33,82 @@ class HeaderBar extends ConsumerWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32.0),
-        child: Row(
+        child: Stack(
           children: [
             // 左侧图标
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.cyan.withOpacity(0.6),
-                    Colors.blue.withOpacity(0.4),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.cyan.withOpacity(0.3),
-                    blurRadius: 15,
-                    spreadRadius: 2,
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.cyan.withOpacity(0.6),
+                          Colors.blue.withOpacity(0.4),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.cyan.withOpacity(0.3),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.warehouse,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.warehouse,
-                color: Colors.white,
-                size: 28,
-              ),
             ),
 
-            const SizedBox(width: 20),
-
-            // 标题文字（渐变效果）
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [
-                  Color(0xFF00d4ff),
-                  Color(0xFF0099ff),
-                ],
-              ).createShader(bounds),
-              child: const Text(
-                '仓库管理系统看板',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 2,
+            // 居中标题文字（渐变效果）
+            Center(
+              child: ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [
+                    Color(0xFF00d4ff),
+                    Color(0xFF0099ff),
+                  ],
+                ).createShader(bounds),
+                child: const Text(
+                  '站台看板',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 2,
+                  ),
                 ),
               ),
             ),
 
-            const Spacer(),
+            // 右侧状态区域
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Row(
+                children: [
+                  // 连接状态指示器
+                  _buildConnectionStatus(isConnected),
 
-            // 连接状态指示器
-            _buildConnectionStatus(isConnected),
+                  const SizedBox(width: 20),
 
-            const SizedBox(width: 20),
-
-            // 当前时间
-            _buildCurrentTime(),
+                  // 当前时间
+                  _buildCurrentTime(),
+                ],
+              ),
+            ),
           ],
         ),
       ),

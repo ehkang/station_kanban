@@ -228,40 +228,6 @@ class _TrayListPanelState extends ConsumerState<TrayListPanel>
                 tray.taskCode!,
               ),
             ],
-
-            // 货物数量
-            if (tray.goodsList.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: Colors.orange.withOpacity(0.5),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.inventory,
-                      color: Colors.orange,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '货物: ${tray.goodsList.length}',
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),

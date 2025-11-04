@@ -71,7 +71,7 @@ class HeaderBar extends ConsumerWidget {
               ),
             ),
 
-            // 居中标题文字（渐变效果）
+            // 居中标题文字（渐变效果）- 显示站台编号
             Center(
               child: ShaderMask(
                 shaderCallback: (bounds) => const LinearGradient(
@@ -80,9 +80,9 @@ class HeaderBar extends ConsumerWidget {
                     Color(0xFF0099ff),
                   ],
                 ).createShader(bounds),
-                child: const Text(
-                  '站台看板',
-                  style: TextStyle(
+                child: Text(
+                  '${provider.stationNumber}站台看板',
+                  style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -99,6 +99,11 @@ class HeaderBar extends ConsumerWidget {
               bottom: 0,
               child: Row(
                 children: [
+                  // 站台选择器
+                  _buildStationSelector(context, ref, provider),
+
+                  const SizedBox(width: 20),
+
                   // 连接状态指示器
                   _buildConnectionStatus(isConnected),
 
@@ -111,6 +116,74 @@ class HeaderBar extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 站台选择器
+  /// 对应 Vue 中的 station-switcher
+  Widget _buildStationSelector(
+      BuildContext context, WidgetRef ref, DashboardProvider provider) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.cyan.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 站台图标
+          Icon(
+            Icons.location_on,
+            color: Colors.cyan,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+
+          // "站台"标签
+          Text(
+            '站台',
+            style: TextStyle(
+              color: Colors.cyan.shade200,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // 下拉选择框
+          DropdownButton<String>(
+            value: provider.selectedStation,
+            dropdownColor: const Color(0xFF1a1f3a),
+            style: TextStyle(
+              color: Colors.cyan.shade100,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            underline: Container(), // 移除下划线
+            icon: Icon(
+              Icons.arrow_drop_down,
+              color: Colors.cyan,
+              size: 20,
+            ),
+            items: DashboardProvider.availableStations.map((station) {
+              return DropdownMenuItem<String>(
+                value: station,
+                child: Text(station),
+              );
+            }).toList(),
+            onChanged: (String? newStation) {
+              if (newStation != null) {
+                provider.changeStation(newStation);
+              }
+            },
+          ),
+        ],
       ),
     );
   }

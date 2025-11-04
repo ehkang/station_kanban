@@ -12,16 +12,14 @@ class GoodsGridPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final provider = ref.watch(dashboardProvider);
-    final trays = provider.traysWithDevices;
 
-    // 获取所有货物（最多显示 10 个）
-    final allGoods = <Goods>[];
-    for (final tray in trays) {
-      allGoods.addAll(tray.goodsList);
-      if (allGoods.length >= 10) break;
-    }
+    // 直接从 provider 获取当前站台的货物数据
+    // 对应 Vue 版本中的 localGoods
+    final currentGoods = provider.currentGoods;
+    final currentContainer = provider.currentContainer;
 
-    final displayGoods = allGoods.take(10).toList();
+    // 最多显示 10 个货物（5x2 网格）
+    final displayGoods = currentGoods.take(10).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -42,7 +40,7 @@ class GoodsGridPanel extends ConsumerWidget {
       child: Column(
         children: [
           // 面板标题
-          _buildPanelHeader(displayGoods.length),
+          _buildPanelHeader(displayGoods.length, currentContainer),
 
           const Divider(
             color: Colors.cyan,
@@ -63,47 +61,98 @@ class GoodsGridPanel extends ConsumerWidget {
   }
 
   /// 面板标题
-  Widget _buildPanelHeader(int count) {
+  Widget _buildPanelHeader(int count, String containerCode) {
     return Container(
       padding: const EdgeInsets.all(16),
-      child: Row(
+      height: 80, // 给 Stack 一个固定高度，增加以容纳容器编码显示
+      child: Stack(
         children: [
-          Icon(
-            Icons.grid_view,
-            color: Colors.cyan,
-            size: 24,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '货物展示',
-            style: TextStyle(
-              color: Colors.cyan,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          // 左侧：货物展示标签
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.grid_view,
+                  color: Colors.cyan,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '货物展示',
+                  style: TextStyle(
+                    color: Colors.cyan,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
-          const Spacer(),
-          Text(
-            '5 × 2',
-            style: TextStyle(
-              color: Colors.cyan.withOpacity(0.7),
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.cyan.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$count / 10',
-              style: const TextStyle(
-                color: Colors.cyan,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+
+          // 中心：容器编码
+          if (containerCode.isNotEmpty)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.orange.withOpacity(0.3),
+                      Colors.deepOrange.withOpacity(0.2),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.orange.withOpacity(0.6),
+                    width: 2,
+                  ),
+                ),
+                child: Text(
+                  '容器: $containerCode',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
               ),
+            ),
+
+          // 右侧：货物数量统计
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: Row(
+              children: [
+                Text(
+                  '5 × 2',
+                  style: TextStyle(
+                    color: Colors.cyan.withOpacity(0.7),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.cyan.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$count / 10',
+                    style: const TextStyle(
+                      color: Colors.cyan,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

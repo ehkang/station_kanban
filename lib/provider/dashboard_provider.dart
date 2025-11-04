@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:signalr_netcore/signalr_client.dart';
+import 'package:dio/dio.dart';
 import '../model/device.dart';
 import '../model/container.dart' as model;
+import '../model/goods.dart';
 import '../service/signalr_service.dart';
 
 /// Dashboard 状态管理
@@ -18,9 +20,23 @@ class DashboardProvider extends ChangeNotifier {
   final List<String> _logs = [];
   bool _isConnected = false;
 
+  // 站台监控相关
+  String _selectedStation = 'Tran3001'; // 当前选中的站台
+  String _stationName = '未知站台'; // 站台名称
+  String _currentContainer = ''; // 当前站台上的容器编号
+  final List<Goods> _currentGoods = []; // 当前容器的货物列表
+
   // 日志配置：限制最大日志数量，防止内存暴增
   // 100条日志约占用 20-30KB 内存（每条平均100字符）
   static const int _maxLogCount = 100;
+
+  // 可选站台列表
+  static const List<String> availableStations = [
+    'Tran3001',
+    'Tran3002',
+    'Tran3003',
+    'Tran3004',
+  ];
 
   DashboardProvider(this._signalRService) {
     _initSignalR();
@@ -33,7 +49,22 @@ class DashboardProvider extends ChangeNotifier {
   List<String> get logs => _logs;
   bool get isConnected => _isConnected;
 
+  // 站台相关 Getters
+  String get selectedStation => _selectedStation;
+  String get stationName => _stationName;
+  String get currentContainer => _currentContainer;
+  List<Goods> get currentGoods => _currentGoods;
+
+  /// 获取站台编号（去除前缀，如 Tran3001 -> 3001）
+  String get stationNumber {
+    // 提取数字部分，去除 "Tran" 等前缀
+    final match = RegExp(r'\d+').firstMatch(_selectedStation);
+    return match?.group(0) ?? _selectedStation;
+  }
+
   /// 获取有托盘的容器列表（用于左侧托盘列表显示）
+  /// 对应 Vue 版本中的 containers 逻辑
+  /// 注意：去重逻辑在 _deduplicateTrays() 中完成，这里只需要简单映射即可
   List<model.ContainerModel> get traysWithDevices {
     return _deviceTrayMap.values
         .map((containerCode) => _containers[containerCode])
@@ -95,8 +126,16 @@ class DashboardProvider extends ChangeNotifier {
 
       _devices[deviceNo] = device;
 
+      // 更新站台名称（如果这是当前选中的站台）
+      if (deviceNo == _selectedStation) {
+        _stationName = device.deviceName ?? device.deviceCode;
+      }
+
       // 更新托盘映射
       _updateDeviceTrayMap();
+
+      // 检查当前站台的容器是否变化
+      _checkCurrentStationContainer();
 
       notifyListeners();
     } catch (e) {
@@ -201,11 +240,52 @@ class DashboardProvider extends ChangeNotifier {
 
         // 保留第一个，移除其他的
         final keepDevice = deviceCodes.first;
+
+        // 更新容器的 deviceCode 为保留的设备
+        final container = _containers[containerCode];
+        if (container != null) {
+          // 从保留的设备获取最新的地址和任务信息
+          final keepDeviceObj = _getDeviceByCode(keepDevice);
+          _containers[containerCode] = model.ContainerModel(
+            containerCode: containerCode,
+            deviceCode: keepDevice,
+            address: keepDeviceObj?.address,
+            taskCode: keepDeviceObj?.taskCode,
+            containerTypeCode: container.containerTypeCode,
+            containerTypeName: container.containerTypeName,
+            destAddress: container.destAddress,
+            sourceAddress: container.sourceAddress,
+            status: container.status,
+            createTime: container.createTime,
+            updateTime: container.updateTime,
+          );
+        }
+
+        // 移除其他设备上的托盘映射
         for (int i = 1; i < deviceCodes.length; i++) {
           _deviceTrayMap.remove(deviceCodes[i]);
         }
       }
     }
+  }
+
+  /// 根据 deviceCode 获取设备对象（包括子设备）
+  Device? _getDeviceByCode(String deviceCode) {
+    // 先在顶层设备中查找
+    if (_devices.containsKey(deviceCode)) {
+      return _devices[deviceCode];
+    }
+
+    // 在子设备中查找
+    for (final device in _devices.values) {
+      for (final child in device.children) {
+        if (child.deviceCode == deviceCode) {
+          return child;
+        }
+      }
+    }
+
+    return null;
   }
 
   /// 检查托盘编码是否有效
@@ -221,6 +301,122 @@ class DashboardProvider extends ChangeNotifier {
     if (deviceCode.startsWith('Stack')) return 2; // 堆垛机次之
     if (deviceCode.startsWith('Station')) return 1; // 站台最低
     return 0;
+  }
+
+  /// 切换监视的站台
+  /// 对应 Vue 中的 onStationChange
+  Future<void> changeStation(String newStation) async {
+    if (_selectedStation == newStation) return;
+
+    _selectedStation = newStation;
+
+    // 更新站台名称
+    final device = _devices[newStation];
+    if (device != null) {
+      _stationName = device.deviceName ?? device.deviceCode;
+    } else {
+      _stationName = newStation;
+    }
+
+    // 清空当前货物数据
+    _currentContainer = '';
+    _currentGoods.clear();
+
+    // 检查新站台的容器和货物
+    await _checkCurrentStationContainer();
+
+    notifyListeners();
+  }
+
+  /// 检查当前站台的容器和货物
+  /// 对应 Vue 中的 checkCurrentStationTray
+  Future<void> _checkCurrentStationContainer() async {
+    // 从 deviceTrayMap 获取当前站台上的容器编号
+    final containerCode = _deviceTrayMap[_selectedStation];
+
+    print('=== 检查当前站台容器 ===');
+    print('当前选中站台: $_selectedStation');
+    print('deviceTrayMap 内容: $_deviceTrayMap');
+    print('站台上的容器编号: $containerCode');
+    print('当前容器: $_currentContainer');
+
+    if (containerCode != null && containerCode.isNotEmpty) {
+      // 如果容器编号变化了，重新获取货物
+      if (containerCode != _currentContainer) {
+        print('容器变化，重新获取货物: $containerCode');
+        await _fetchGoods(containerCode);
+      } else {
+        print('容器未变化，不重新获取');
+      }
+    } else {
+      print('站台上没有容器，清空数据');
+      // 站台上没有容器，清空数据
+      if (_currentContainer.isNotEmpty) {
+        _currentContainer = '';
+        _currentGoods.clear();
+        notifyListeners();
+      }
+    }
+  }
+
+  /// 获取容器货物信息
+  /// 对应 Vue 中的 getGoods 和 getContainerGoods
+  Future<void> _fetchGoods(String containerCode) async {
+    print('=== 开始获取货物信息 ===');
+    print('容器编码: $containerCode');
+
+    if (containerCode.isEmpty || containerCode == '0') {
+      print('容器编码无效，清空数据');
+      _currentGoods.clear();
+      _currentContainer = '';
+      notifyListeners();
+      return;
+    }
+
+    try {
+      _currentContainer = containerCode;
+
+      // 调用 WMS API 获取容器货物信息
+      // 对应 Vue 版本的 API 配置: http://10.20.88.14:8008/api/warehouse
+      final dio = Dio(BaseOptions(
+        baseUrl: 'http://10.20.88.14:8008/api/warehouse', // WMS API 地址（修正）
+        connectTimeout: const Duration(seconds: 10),
+        headers: {'Cache-Control': 'no-cache'},
+      ));
+
+      final url = '/Inventory/container/$containerCode';
+      print('API 请求: http://10.20.88.14:8008/api/warehouse$url');
+
+      final response = await dio.get(url);
+
+      print('API 响应状态码: ${response.statusCode}');
+      print('API 响应数据: ${response.data}');
+
+      if (response.data != null && response.data['errCode'] == 0) {
+        final goodsList = response.data['data'] as List?;
+        print('货物列表长度: ${goodsList?.length ?? 0}');
+
+        if (goodsList != null) {
+          _currentGoods.clear();
+          _currentGoods.addAll(
+            goodsList.map((item) => Goods.fromJson(item as Map<String, dynamic>)),
+          );
+          print('成功加载 ${_currentGoods.length} 个货物');
+        } else {
+          print('货物列表为空');
+        }
+      } else {
+        print('API 返回错误: errCode=${response.data?['errCode']}, errMsg=${response.data?['errMsg']}');
+        _currentGoods.clear();
+      }
+
+      notifyListeners();
+    } catch (e) {
+      print('获取货物信息失败: $e');
+      print('错误堆栈: ${StackTrace.current}');
+      _currentGoods.clear();
+      notifyListeners();
+    }
   }
 
   /// 添加日志（仅用于接收服务器推送的日志）

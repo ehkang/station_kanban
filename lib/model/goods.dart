@@ -61,25 +61,45 @@ class Goods {
 
   factory Goods.fromJson(Map<String, dynamic> json) {
     return Goods(
-      goodsCode: json['goodsCode'] as String,
-      goodsName: json['goodsName'] as String?,
-      goodsTypeCode: json['goodsTypeCode'] as String?,
-      goodsTypeName: json['goodsTypeName'] as String?,
-      quantity: (json['quantity'] as num?)?.toDouble(),
-      unit: json['unit'] as String?,
-      batchNo: json['batchNo'] as String?,
-      slotX: json['slotX'] as int?,
-      slotY: json['slotY'] as int?,
-      status: json['status'] as int?,
-      imageUrl: json['imageUrl'] as String?,
-      remark: json['remark'] as String?,
+      // 兼容 Vue API: goodsNo 和 goodsCode 都支持
+      goodsCode: (json['goodsNo'] ?? json['goodsCode'])?.toString() ?? '',
+      goodsName: json['goodsName']?.toString(),
+      goodsTypeCode: json['goodsTypeCode']?.toString(),
+      goodsTypeName: json['goodsTypeName']?.toString(),
+      // 安全转换数量
+      quantity: _parseToDouble(json['quantity']),
+      unit: json['unit']?.toString() ?? '件',
+      batchNo: json['batchNo']?.toString(),
+      slotX: _parseToInt(json['slotX']),
+      slotY: _parseToInt(json['slotY']),
+      status: _parseToInt(json['status']),
+      imageUrl: json['imageUrl']?.toString(),
+      remark: json['remark']?.toString(),
       createTime: json['createTime'] != null
-          ? DateTime.parse(json['createTime'] as String)
+          ? DateTime.tryParse(json['createTime'].toString())
           : null,
       updateTime: json['updateTime'] != null
-          ? DateTime.parse(json['updateTime'] as String)
+          ? DateTime.tryParse(json['updateTime'].toString())
           : null,
     );
+  }
+
+  /// 安全解析 double 类型
+  static double? _parseToDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  /// 安全解析 int 类型
+  static int? _parseToInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 
   Map<String, dynamic> toJson() {

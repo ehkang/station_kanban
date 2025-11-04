@@ -1,6 +1,6 @@
-import 'goods.dart';
-
 /// 托盘/容器模型
+/// 对应 Vue 项目中的 Container 接口
+/// 注意：货物数据不存储在容器中，而是单独通过API获取
 class ContainerModel {
   /// 托盘编码
   final String containerCode;
@@ -29,9 +29,6 @@ class ContainerModel {
   /// 状态
   final int? status;
 
-  /// 货物列表
-  final List<Goods> goodsList;
-
   /// 创建时间
   final DateTime? createTime;
 
@@ -48,7 +45,6 @@ class ContainerModel {
     this.sourceAddress,
     this.taskCode,
     this.status,
-    this.goodsList = const [],
     this.createTime,
     this.updateTime,
   });
@@ -64,10 +60,6 @@ class ContainerModel {
       sourceAddress: json['sourceAddress'] as String?,
       taskCode: json['taskCode'] as String?,
       status: json['status'] as int?,
-      goodsList: (json['goodsList'] as List<dynamic>?)
-              ?.map((e) => Goods.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
       createTime: json['createTime'] != null
           ? DateTime.parse(json['createTime'] as String)
           : null,
@@ -88,7 +80,6 @@ class ContainerModel {
       'sourceAddress': sourceAddress,
       'taskCode': taskCode,
       'status': status,
-      'goodsList': goodsList.map((e) => e.toJson()).toList(),
       'createTime': createTime?.toIso8601String(),
       'updateTime': updateTime?.toIso8601String(),
     };

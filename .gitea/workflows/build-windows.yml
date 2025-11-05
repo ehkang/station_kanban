@@ -28,13 +28,13 @@ jobs:
       shell: pwsh
       run: |
         $content = Get-Content pubspec.yaml -Raw
-        $fullVersion = [regex]::Match($content, 'version:\s+(.+)').Groups[1].Value.Trim()
-        # 提取主版本号（去除构建号）用于发布文件名
-        $releaseVersion = $fullVersion -replace '\+.*$', ''
-        echo "APP_VERSION=$fullVersion" >> $env:GITHUB_ENV
+        $version = [regex]::Match($content, 'version:\s+(.+)').Groups[1].Value.Trim()
+        # 提取发布版本号（去除构建号）用于文件名
+        $releaseVersion = $version -replace '\+.*$', ''
+        echo "APP_VERSION=$version" >> $env:GITHUB_ENV
         echo "RELEASE_VERSION=$releaseVersion" >> $env:GITHUB_ENV
-        echo "version=$releaseVersion" >> $env:GITHUB_OUTPUT
-        echo "完整版本号: $fullVersion"
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "完整版本号: $version"
         echo "发布版本号: $releaseVersion"
 
     - name: 设置 Flutter

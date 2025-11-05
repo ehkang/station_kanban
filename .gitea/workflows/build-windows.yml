@@ -28,10 +28,13 @@ jobs:
       shell: pwsh
       run: |
         $content = Get-Content pubspec.yaml -Raw
-        $version = [regex]::Match($content, 'version:\s+(.+)').Groups[1].Value
+        $version = [regex]::Match($content, 'version:\s+(.+)').Groups[1].Value.Trim()
+        # 替换文件名中的非法字符 (+) 为下划线
+        $versionSafe = $version -replace '\+', '_'
         echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+        echo "APP_VERSION_SAFE=$versionSafe" >> $env:GITHUB_ENV
         echo "version=$version" >> $env:GITHUB_OUTPUT
-        echo "发现版本号: $version"
+        echo "发现版本号: $version (文件名安全版本: $versionSafe)"
 
     - name: 设置 Flutter
       uses: subosito/flutter-action@v2
@@ -64,7 +67,7 @@ jobs:
     - name: 创建发布目录结构
       shell: pwsh
       run: |
-        $releaseDir = "door_designer_v${{ env.APP_VERSION }}_windows_x64"
+        $releaseDir = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64"
         New-Item -ItemType Directory -Force -Path $releaseDir
         Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination $releaseDir -Recurse
         echo "RELEASE_DIR=$releaseDir" >> $env:GITHUB_ENV
@@ -72,7 +75,7 @@ jobs:
     - name: 打包编译产物
       shell: pwsh
       run: |
-        $zipName = "door_designer_v${{ env.APP_VERSION }}_windows_x64.zip"
+        $zipName = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64.zip"
         Compress-Archive -Path "${{ env.RELEASE_DIR }}/*" -DestinationPath $zipName
         echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
         echo "打包完成: $zipName"
@@ -81,7 +84,7 @@ jobs:
     - name: 上传编译产物
       uses: actions/upload-artifact@v4
       with:
-        name: door_designer_v${{ env.APP_VERSION }}_windows_x64
+        name: door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64
         path: ${{ env.ZIP_NAME }}
         retention-days: 30
 

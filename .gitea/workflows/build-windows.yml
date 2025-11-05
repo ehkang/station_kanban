@@ -1,4 +1,4 @@
-name: Build Windows App
+name: Build Windows App (Gitea)
 
 on:
   push:
@@ -44,10 +44,10 @@ jobs:
         path: door_designer-windows-x64.zip
         retention-days: 30
 
-    # 如果是 tag，创建 Release
-    - name: 创建 GitHub Release
+    # 如果是 tag，创建 Release（Gitea 1.21+ 支持）
+    - name: 创建 Gitea Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: https://gitea.com/gitea/release-action@main
       with:
         files: door_designer-windows-x64.zip
       env:

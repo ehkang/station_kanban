@@ -3,9 +3,17 @@ name: Build Windows App
 on:
   push:
     branches: [ master, main ]
+    tags:
+      - 'v*'  # 推送 v 开头的 tag 时触发（如 v1.0.0）
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:  # 允许手动触发
+    inputs:
+      create_release:
+        description: '是否创建 GitHub Release'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-windows:
@@ -15,10 +23,31 @@ jobs:
     - name: 检出代码
       uses: actions/checkout@v4
 
+    - name: 提取版本号
+      id: version
+      shell: pwsh
+      run: |
+        $content = Get-Content pubspec.yaml -Raw
+        $version = [regex]::Match($content, 'version:\s+(.+)').Groups[1].Value
+        echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "发现版本号: $version"
+
     - name: 设置 Flutter
       uses: subosito/flutter-action@v2
       with:
-        channel: 'stable'  # 使用最新稳定版本
+        channel: 'stable'
+        cache: true  # 启用 Flutter SDK 缓存
+
+    - name: 缓存 Pub 依赖
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.LOCALAPPDATA }}\Pub\Cache
+          **/.dart_tool
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
 
     - name: 启用 Windows 桌面支持
       run: flutter config --enable-windows-desktop
@@ -30,25 +59,50 @@ jobs:
       run: flutter pub get
 
     - name: 编译 Windows Release 版本
-      run: flutter build windows --release
+      run: flutter build windows --release --verbose
+
+    - name: 创建发布目录结构
+      shell: pwsh
+      run: |
+        $releaseDir = "door_designer_v${{ env.APP_VERSION }}_windows_x64"
+        New-Item -ItemType Directory -Force -Path $releaseDir
+        Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination $releaseDir -Recurse
+        echo "RELEASE_DIR=$releaseDir" >> $env:GITHUB_ENV
 
     - name: 打包编译产物
+      shell: pwsh
       run: |
-        cd build/windows/x64/runner/Release
-        7z a -tzip ../../../../../door_designer-windows-x64.zip *
+        $zipName = "door_designer_v${{ env.APP_VERSION }}_windows_x64.zip"
+        Compress-Archive -Path "${{ env.RELEASE_DIR }}/*" -DestinationPath $zipName
+        echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+        echo "打包完成: $zipName"
+        echo "文件大小: $((Get-Item $zipName).Length / 1MB) MB"
 
     - name: 上传编译产物
       uses: actions/upload-artifact@v4
       with:
-        name: door_designer-windows-x64
-        path: door_designer-windows-x64.zip
+        name: door_designer_v${{ env.APP_VERSION }}_windows_x64
+        path: ${{ env.ZIP_NAME }}
         retention-days: 30
 
-    # 如果是 tag，创建 Release
+    # 如果是 tag 推送或手动触发时选择创建 Release
     - name: 创建 GitHub Release
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.create_release == 'true'
+      uses: softprops/action-gh-release@v2
       with:
-        files: door_designer-windows-x64.zip
+        files: ${{ env.ZIP_NAME }}
+        tag_name: ${{ github.ref_name }}
+        name: Door Designer ${{ env.APP_VERSION }}
+        body: |
+          ## 下载
+          - **Windows x64**: ${{ env.ZIP_NAME }}
+
+          ## 版本信息
+          - 应用版本: ${{ env.APP_VERSION }}
+          - 构建时间: ${{ github.event.head_commit.timestamp }}
+          - 提交: ${{ github.sha }}
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

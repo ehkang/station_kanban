@@ -20,92 +20,92 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+    - name: 检出代码
+      uses: actions/checkout@v4
 
-      - name: 提取版本号
-        id: version
-        shell: pwsh
-        run: |
-          $content = Get-Content pubspec.yaml -Raw
-          $version = [regex]::Match($content, 'version:\s+(.+)').Groups[1].Value.Trim()
-          # 替换文件名中的非法字符 (+) 为下划线
-          $versionSafe = $version -replace '\+', '_'
-          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
-          echo "APP_VERSION_SAFE=$versionSafe" >> $env:GITHUB_ENV
-          echo "version=$version" >> $env:GITHUB_OUTPUT
-          echo "发现版本号: $version (文件名安全版本: $versionSafe)"
+    - name: 提取版本号
+      id: version
+      shell: pwsh
+      run: |
+        $content = Get-Content pubspec.yaml -Raw
+        $version = [regex]::Match($content, 'version:\s+(.+)').Groups[1].Value.Trim()
+        # 替换文件名中的非法字符 (+) 为下划线
+        $versionSafe = $version -replace '\+', '_'
+        echo "APP_VERSION=$version" >> $env:GITHUB_ENV
+        echo "APP_VERSION_SAFE=$versionSafe" >> $env:GITHUB_ENV
+        echo "version=$version" >> $env:GITHUB_OUTPUT
+        echo "发现版本号: $version (文件名安全版本: $versionSafe)"
 
-      - name: 设置 Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true  # 启用 Flutter SDK 缓存
+    - name: 设置 Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true  # 启用 Flutter SDK 缓存
 
-      - name: 缓存 Pub 依赖
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.LOCALAPPDATA }}\Pub\Cache
-            **/.dart_tool
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
+    - name: 缓存 Pub 依赖
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.LOCALAPPDATA }}\Pub\Cache
+          **/.dart_tool
+        key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-pub-
 
-      - name: 启用 Windows 桌面支持
-        run: flutter config --enable-windows-desktop
+    - name: 启用 Windows 桌面支持
+      run: flutter config --enable-windows-desktop
 
-      - name: 检查 Flutter 环境
-        run: flutter doctor -v
+    - name: 检查 Flutter 环境
+      run: flutter doctor -v
 
-      - name: 获取依赖
-        run: flutter pub get
+    - name: 获取依赖
+      run: flutter pub get
 
-      - name: 编译 Windows Release 版本
-        run: flutter build windows --release --verbose
+    - name: 编译 Windows Release 版本
+      run: flutter build windows --release --verbose
 
-      - name: 创建发布目录结构
-        shell: pwsh
-        run: |
-          $releaseDir = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64"
-          New-Item -ItemType Directory -Force -Path $releaseDir
-          Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination $releaseDir -Recurse
-          echo "RELEASE_DIR=$releaseDir" >> $env:GITHUB_ENV
+    - name: 创建发布目录结构
+      shell: pwsh
+      run: |
+        $releaseDir = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64"
+        New-Item -ItemType Directory -Force -Path $releaseDir
+        Copy-Item -Path "build/windows/x64/runner/Release/*" -Destination $releaseDir -Recurse
+        echo "RELEASE_DIR=$releaseDir" >> $env:GITHUB_ENV
 
-      - name: 打包编译产物
-        shell: pwsh
-        run: |
-          $zipName = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64.zip"
-          Compress-Archive -Path "${{ env.RELEASE_DIR }}/*" -DestinationPath $zipName
-          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
-          echo "打包完成: $zipName"
-          echo "文件大小: $((Get-Item $zipName).Length / 1MB) MB"
+    - name: 打包编译产物
+      shell: pwsh
+      run: |
+        $zipName = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64.zip"
+        Compress-Archive -Path "${{ env.RELEASE_DIR }}/*" -DestinationPath $zipName
+        echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+        echo "打包完成: $zipName"
+        echo "文件大小: $((Get-Item $zipName).Length / 1MB) MB"
 
-      - name: 上传编译产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64
-          path: ${{ env.ZIP_NAME }}
-          retention-days: 30
-      
-      # 如果是 tag 推送或手动触发时选择创建 Release
-      - name: 创建 GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.create_release == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.ZIP_NAME }}
-          tag_name: ${{ github.ref_name }}
-          name: Door Designer ${{ env.APP_VERSION }}
-          body: |
-            ## 下载
-            - **Windows x64**: ${{ env.ZIP_NAME }}
-            
-            ## 版本信息
-            - 应用版本: ${{ env.APP_VERSION }}
-            - 构建时间: ${{ github.event.head_commit.timestamp }}
-            - 提交: ${{ github.sha }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: 上传编译产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64
+        path: ${{ env.ZIP_NAME }}
+        retention-days: 30
+
+    # 如果是 tag 推送或手动触发时选择创建 Release
+    - name: 创建 GitHub Release
+      if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.create_release == 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ${{ env.ZIP_NAME }}
+        tag_name: ${{ github.ref_name }}
+        name: Door Designer ${{ env.APP_VERSION }}
+        body: |
+          ## 下载
+          - **Windows x64**: ${{ env.ZIP_NAME }}
+
+          ## 版本信息
+          - 应用版本: ${{ env.APP_VERSION }}
+          - 构建时间: ${{ github.event.head_commit.timestamp }}
+          - 提交: ${{ github.sha }}
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

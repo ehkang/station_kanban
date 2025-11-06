@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:signalr_netcore/signalr_client.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../model/device.dart';
 import '../model/container.dart' as model;
 import '../model/goods.dart';
@@ -30,6 +31,9 @@ class DashboardProvider extends ChangeNotifier {
   // 100条日志约占用 20-30KB 内存（每条平均100字符）
   static const int _maxLogCount = 100;
 
+  // SharedPreferences 存储 key
+  static const String _selectedStationKey = 'selected_station';
+
   // 可选站台列表
   static const List<String> availableStations = [
     'Tran3001',
@@ -39,6 +43,7 @@ class DashboardProvider extends ChangeNotifier {
   ];
 
   DashboardProvider(this._signalRService) {
+    _loadSavedStation();
     _initSignalR();
   }
 
@@ -70,6 +75,35 @@ class DashboardProvider extends ChangeNotifier {
         .map((containerCode) => _containers[containerCode])
         .whereType<model.ContainerModel>()
         .toList();
+  }
+
+  /// 从本地存储加载上次选择的站台
+  Future<void> _loadSavedStation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedStation = prefs.getString(_selectedStationKey);
+
+      if (savedStation != null && availableStations.contains(savedStation)) {
+        _selectedStation = savedStation;
+        print('加载保存的站台: $savedStation');
+        notifyListeners();
+      } else {
+        print('没有保存的站台或站台无效，使用默认值: $_selectedStation');
+      }
+    } catch (e) {
+      print('加载保存的站台失败: $e');
+    }
+  }
+
+  /// 保存当前选择的站台到本地存储
+  Future<void> _saveStation(String station) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_selectedStationKey, station);
+      print('保存站台选择: $station');
+    } catch (e) {
+      print('保存站台失败: $e');
+    }
   }
 
   /// 初始化 SignalR 连接
@@ -309,6 +343,9 @@ class DashboardProvider extends ChangeNotifier {
     if (_selectedStation == newStation) return;
 
     _selectedStation = newStation;
+
+    // 保存站台选择到本地存储
+    await _saveStation(newStation);
 
     // 更新站台名称
     final device = _devices[newStation];

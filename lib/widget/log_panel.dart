@@ -21,11 +21,11 @@ class _LogPanelState extends ConsumerState<LogPanel> {
     super.dispose();
   }
 
-  /// 自动滚动到底部（只在日志数量增加时触发）
+  /// 自动滚动到底部（reverse模式下滚动到开始位置）
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0.0,  // reverse模式下，0是底部
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -37,7 +37,7 @@ class _LogPanelState extends ConsumerState<LogPanel> {
     final provider = ref.watch(dashboardProvider);
     final logs = provider.logs;
 
-    // 只在日志数量增加时自动滚动到底部
+    // 只在日志数量增加时自动滚动到底部（新日志位置）
     if (logs.length > _previousLogCount) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
@@ -72,16 +72,19 @@ class _LogPanelState extends ConsumerState<LogPanel> {
             thickness: 0.5,
           ),
 
-          // 日志列表
+          // 日志列表 - 使用 reverse 模式，新日志从底部冒出
           Expanded(
             child: logs.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(8),
+                    reverse: true,  // 反转列表，从底部开始显示
                     itemCount: logs.length,
                     itemBuilder: (context, index) {
-                      return _buildLogItem(logs[index], index);
+                      // 反转索引，最新的日志（列表末尾）显示在底部
+                      final reversedIndex = logs.length - 1 - index;
+                      return _buildLogItem(logs[reversedIndex], reversedIndex);
                     },
                   ),
           ),
@@ -159,13 +162,20 @@ class _LogPanelState extends ConsumerState<LogPanel> {
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutBack,  // 使用弹性曲线，更有动感
       builder: (context, value, child) {
+        // 钳制 opacity 在有效范围内，因为 easeOutBack 会超过 1.0
+        final clampedOpacity = value.clamp(0.0, 1.0);
+
         return Opacity(
-          opacity: value,
+          opacity: clampedOpacity,
           child: Transform.translate(
-            offset: Offset(20 * (1 - value), 0),
-            child: child,
+            offset: Offset(0, 30 * (1 - value)),  // 从下往上冒出（Y轴正方向）
+            child: Transform.scale(
+              scale: 0.8 + (0.2 * value),  // 同时有缩放效果，从80%到100%
+              child: child,
+            ),
           ),
         );
       },

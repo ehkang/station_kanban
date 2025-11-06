@@ -31,9 +31,19 @@ jobs:
       id: version
       shell: pwsh
       run: |
-        $content = Get-Content pubspec.yaml -Raw
-        # 严格匹配版本号，排除注释和多余空格
-        $version = [regex]::Match($content, 'version:\s+([^\s#]+)').Groups[1].Value
+        # 检查是否是 tag 触发
+        $gitRef = "${{ github.ref }}"
+
+        if ($gitRef -match '^refs/tags/v(.+)$') {
+            # Tag 触发：使用 tag 版本号（去掉 v 前缀）
+            $version = $matches[1]
+            Write-Host "✓ 使用 Git Tag 版本号: $version"
+        } else {
+            # 非 Tag 触发：从 pubspec.yaml 读取
+            $content = Get-Content pubspec.yaml -Raw
+            $version = [regex]::Match($content, 'version:\s+([^\s#]+)').Groups[1].Value
+            Write-Host "✓ 使用 pubspec.yaml 版本号: $version"
+        }
 
         # 验证版本号格式
         if ($version -notmatch '^\d+\.\d+\.\d+(\+\d+)?$') {
@@ -41,13 +51,13 @@ jobs:
             exit 1
         }
 
-        # 替换文件名中的所有非法字符为下划线
-        $versionSafe = $version -replace '[+<>:"/\\|?*]', '_'
+        # 去掉构建号，用于文件名和Release标题（0.0.2 而不是 0.0.2+1）
+        $releaseVersion = $version -replace '\+.*$', ''
 
         echo "APP_VERSION=$version" >> $env:GITHUB_ENV
-        echo "APP_VERSION_SAFE=$versionSafe" >> $env:GITHUB_ENV
-        echo "version=$version" >> $env:GITHUB_OUTPUT
-        echo "发现版本号: $version (文件名安全版本: $versionSafe)"
+        echo "RELEASE_VERSION=$releaseVersion" >> $env:GITHUB_ENV
+        echo "version=$releaseVersion" >> $env:GITHUB_OUTPUT
+        Write-Host "✓ 发布版本号: $releaseVersion"
 
     - name: 设置 Flutter
       uses: subosito/flutter-action@v2
@@ -90,7 +100,7 @@ jobs:
             exit 1
         }
 
-        $releaseDir = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64"
+        $releaseDir = "wms_station_kanban_v${{ env.RELEASE_VERSION }}_windows_x64"
         New-Item -ItemType Directory -Force -Path $releaseDir
         Copy-Item -Path "$sourcePath/*" -Destination $releaseDir -Recurse
         echo "RELEASE_DIR=$releaseDir" >> $env:GITHUB_ENV
@@ -98,7 +108,7 @@ jobs:
     - name: 打包编译产物
       shell: pwsh
       run: |
-        $zipName = "door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64.zip"
+        $zipName = "wms_station_kanban_v${{ env.RELEASE_VERSION }}_windows_x64.zip"
         Compress-Archive -Path "${{ env.RELEASE_DIR }}/*" -DestinationPath $zipName
         echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
         echo "打包完成: $zipName"
@@ -107,7 +117,7 @@ jobs:
     - name: 上传编译产物
       uses: actions/upload-artifact@v4
       with:
-        name: door_designer_v${{ env.APP_VERSION_SAFE }}_windows_x64
+        name: wms_station_kanban_v${{ env.RELEASE_VERSION }}_windows_x64
         path: ${{ env.ZIP_NAME }}
         retention-days: 30
 
@@ -118,13 +128,13 @@ jobs:
       with:
         files: ${{ env.ZIP_NAME }}
         tag_name: ${{ github.ref_name }}
-        name: Door Designer ${{ env.APP_VERSION }}
+        name: WMS Station Kanban ${{ env.RELEASE_VERSION }}
         body: |
           ## 下载
           - **Windows x64**: ${{ env.ZIP_NAME }}
 
           ## 版本信息
-          - 应用版本: ${{ env.APP_VERSION }}
+          - 版本: ${{ env.RELEASE_VERSION }}
           - 构建时间: ${{ github.event.head_commit.timestamp || 'N/A' }}
           - 提交: ${{ github.sha }}
         draft: false

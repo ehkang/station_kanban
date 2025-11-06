@@ -20,6 +20,8 @@ class DashboardProvider extends ChangeNotifier {
   final Map<String, String> _deviceTrayMap = {}; // deviceCode -> containerCode
   final List<String> _logs = [];
   bool _isConnected = false;
+  HubConnectionState _connectionState = HubConnectionState.Disconnected;
+  int _reconnectCount = 0;
 
   // 站台监控相关
   String _selectedStation = 'Tran3001'; // 当前选中的站台
@@ -53,6 +55,8 @@ class DashboardProvider extends ChangeNotifier {
   Map<String, String> get deviceTrayMap => _deviceTrayMap;
   List<String> get logs => _logs;
   bool get isConnected => _isConnected;
+  HubConnectionState get connectionState => _connectionState;
+  int get reconnectCount => _reconnectCount;
 
   // 站台相关 Getters
   String get selectedStation => _selectedStation;
@@ -110,7 +114,14 @@ class DashboardProvider extends ChangeNotifier {
   void _initSignalR() {
     // 监听连接状态
     _signalRService.connectionState.listen((state) {
+      _connectionState = state;
       _isConnected = state == HubConnectionState.Connected;
+      notifyListeners();
+    });
+
+    // 监听重连次数
+    _signalRService.reconnectCount.listen((count) {
+      _reconnectCount = count;
       notifyListeners();
     });
 
@@ -118,7 +129,7 @@ class DashboardProvider extends ChangeNotifier {
     _signalRService.deviceUpdates.listen((event) {
       updateDevice(event.deviceNo, event.data);
     });
-    
+
     // 监听服务器推送的日志
     // 对应 Vue 项目中的: signalRConnection.on("logger", ...)
     _signalRService.logs.listen((logEvent) {
@@ -127,6 +138,12 @@ class DashboardProvider extends ChangeNotifier {
 
     // 启动连接
     _signalRService.connect();
+  }
+
+  /// 手动重连
+  /// 供 UI 调用，用户可以主动触发重连
+  Future<void> manualReconnect() async {
+    await _signalRService.reconnect();
   }
 
   /// 更新设备数据

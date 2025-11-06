@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:signalr_netcore/signalr_client.dart';
 import '../provider/dashboard_provider.dart';
 
 /// 顶部标题栏
@@ -105,7 +106,7 @@ class HeaderBar extends ConsumerWidget {
                   const SizedBox(width: 20),
 
                   // 连接状态指示器
-                  _buildConnectionStatus(isConnected),
+                  _buildConnectionStatus(ref),
 
                   const SizedBox(width: 20),
 
@@ -189,56 +190,101 @@ class HeaderBar extends ConsumerWidget {
   }
 
   /// 连接状态指示器
-  Widget _buildConnectionStatus(bool isConnected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isConnected
-              ? Colors.green.withOpacity(0.5)
-              : Colors.red.withOpacity(0.5),
-          width: 1,
+  /// 支持 3 种状态：已连接（绿色）、重连中（橙色）、未连接（红色）
+  Widget _buildConnectionStatus(WidgetRef ref) {
+    final provider = ref.watch(dashboardProvider);
+    final connectionState = provider.connectionState;
+    final reconnectCount = provider.reconnectCount;
+
+    // 根据连接状态确定颜色和文本
+    Color statusColor;
+    String statusText;
+    bool hasGlow;
+
+    switch (connectionState) {
+      case HubConnectionState.Connected:
+        statusColor = Colors.green;
+        statusText = '已连接';
+        hasGlow = true;
+        break;
+      case HubConnectionState.Reconnecting:
+        statusColor = Colors.orange;
+        statusText = reconnectCount > 0 ? '重连中 ($reconnectCount)' : '重连中';
+        hasGlow = true;
+        break;
+      default:
+        statusColor = Colors.red;
+        statusText = '未连接';
+        hasGlow = false;
+    }
+
+    return GestureDetector(
+      onTap: () {
+        // 只有在未连接或重连失败时才允许手动重连
+        if (connectionState != HubConnectionState.Connected) {
+          provider.manualReconnect();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: statusColor.withOpacity(0.5),
+            width: 1,
+          ),
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 状态指示灯（带动画）
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 800),
-            builder: (context, value, child) {
-              return Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isConnected ? Colors.green : Colors.red,
-                  boxShadow: isConnected
-                      ? [
-                          BoxShadow(
-                            color: Colors.green.withOpacity(value * 0.8),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ]
-                      : [],
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          Text(
-            isConnected ? '已连接' : '未连接',
-            style: TextStyle(
-              color: isConnected ? Colors.green : Colors.red,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 状态指示灯（带动画）
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 800),
+              builder: (context, value, child) {
+                return Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: statusColor,
+                    boxShadow: hasGlow
+                        ? [
+                            BoxShadow(
+                              color: statusColor.withOpacity(value * 0.8),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : [],
+                  ),
+                );
+              },
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Text(
+              statusText,
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            // 重连中时显示loading动画
+            if (connectionState == HubConnectionState.Reconnecting) ...[
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

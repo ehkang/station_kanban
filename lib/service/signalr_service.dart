@@ -11,6 +11,12 @@ class SignalRService {
   final _connectionStateController = StreamController<HubConnectionState>.broadcast();
   Stream<HubConnectionState> get connectionState => _connectionStateController.stream;
 
+  /// 重连次数流
+  int _reconnectCount = 0;
+  final _reconnectCountController = StreamController<int>.broadcast();
+  Stream<int> get reconnectCount => _reconnectCountController.stream;
+  int get currentReconnectCount => _reconnectCount;
+
   /// 设备数据更新流
   final _deviceUpdateController = StreamController<DeviceUpdateEvent>.broadcast();
   Stream<DeviceUpdateEvent> get deviceUpdates => _deviceUpdateController.stream;
@@ -36,13 +42,18 @@ class SignalRService {
     });
 
     _hubConnection?.onreconnecting(({error}) {
-      print('SignalR 重连中...');
+      _reconnectCount++;
+      print('SignalR 重连中... (第 $_reconnectCount 次)');
+      _reconnectCountController.add(_reconnectCount);
       _connectionStateController.add(HubConnectionState.Reconnecting);
     });
 
     _hubConnection?.onreconnected(({connectionId}) {
-      print('SignalR 重连成功: $connectionId');
+      print('SignalR 重连成功: $connectionId (共重连 $_reconnectCount 次)');
       _connectionStateController.add(HubConnectionState.Connected);
+      // 重连成功后，重置重连次数
+      _reconnectCount = 0;
+      _reconnectCountController.add(_reconnectCount);
     });
 
     // 注册设备数据更新监听
@@ -103,10 +114,22 @@ class SignalRService {
     _connectionStateController.add(HubConnectionState.Disconnected);
   }
 
+  /// 手动重连
+  /// 用户可以主动触发重连
+  Future<void> reconnect() async {
+    print('手动触发重连...');
+    await disconnect();
+    _reconnectCount = 0;
+    _reconnectCountController.add(_reconnectCount);
+    await Future.delayed(const Duration(milliseconds: 500));
+    await connect();
+  }
+
   /// 释放资源
   void dispose() {
     _hubConnection?.stop();
     _connectionStateController.close();
+    _reconnectCountController.close();
     _deviceUpdateController.close();
     _logController.close();
   }

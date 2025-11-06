@@ -15,6 +15,10 @@ on:
         type: boolean
         default: false
 
+# 明确声明需要的权限
+permissions:
+  contents: write  # 创建 Release 和上传资源
+
 jobs:
   build-windows:
     runs-on: windows-latest

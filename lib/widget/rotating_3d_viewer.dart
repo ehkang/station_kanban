@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:dio/dio.dart';
@@ -7,11 +9,12 @@ import '../utils/webview_3d_html.dart';
 /// 自动旋转的3D模型查看器
 ///
 /// 特点：
-/// - 使用WebView + Three.js渲染STL模型
+/// - 使用WebView + Three.js渲染STL模型（仅 Windows）
 /// - 自动Y轴旋转（6秒一圈）
 /// - 异步加载，不阻塞主界面
 /// - Dart代理下载STL文件（解决CORS问题）
 /// - 支持降级显示（加载失败显示默认图标）
+/// - 跨平台兼容（非 Windows 平台显示占位符）
 class Rotating3DViewer extends StatefulWidget {
   /// STL文件URL
   final String stlUrl;
@@ -31,7 +34,7 @@ class Rotating3DViewer extends StatefulWidget {
 }
 
 class _Rotating3DViewerState extends State<Rotating3DViewer> {
-  final _controller = WebviewController();
+  WebviewController? _controller;
 
   // 状态管理
   bool _isInitializing = false;
@@ -42,6 +45,11 @@ class _Rotating3DViewerState extends State<Rotating3DViewer> {
   @override
   void initState() {
     super.initState();
+
+    // 仅在 Windows 平台初始化 WebView
+    if (!kIsWeb && !Platform.isWindows) {
+      return;
+    }
 
     // 延迟初始化（性能优化）
     if (widget.initDelay > 0) {
@@ -57,7 +65,8 @@ class _Rotating3DViewerState extends State<Rotating3DViewer> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    // 仅在 Windows 平台且 controller 已创建时释放资源
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -71,12 +80,13 @@ class _Rotating3DViewerState extends State<Rotating3DViewer> {
     });
 
     try {
-      // 1. 初始化WebView控制器
-      await _controller.initialize();
+      // 1. 创建并初始化WebView控制器
+      _controller = WebviewController();
+      await _controller!.initialize();
 
       // 2. 加载HTML模板
       final html = WebView3DHTML.generate();
-      await _controller.loadStringContent(html);
+      await _controller!.loadStringContent(html);
 
       // 等待HTML加载完成
       await Future.delayed(const Duration(milliseconds: 500));
@@ -141,7 +151,7 @@ class _Rotating3DViewerState extends State<Rotating3DViewer> {
       // 注意：需要转义引号，避免JS语法错误
       final escapedBase64 = base64STL.replaceAll("'", "\\'");
 
-      await _controller.executeScript('''
+      await _controller?.executeScript('''
         window.postMessage({
           type: 'loadSTL',
           base64: '$escapedBase64'
@@ -157,6 +167,11 @@ class _Rotating3DViewerState extends State<Rotating3DViewer> {
 
   @override
   Widget build(BuildContext context) {
+    // 平台检测：仅在 Windows 上启用 WebView
+    if (!kIsWeb && !Platform.isWindows) {
+      return _buildPlatformNotSupported();
+    }
+
     // 错误状态：显示默认图标
     if (_hasError) {
       return _buildFallbackIcon();
@@ -168,13 +183,17 @@ class _Rotating3DViewerState extends State<Rotating3DViewer> {
     }
 
     // 正常状态：显示WebView
+    if (_controller == null) {
+      return _buildFallbackIcon();
+    }
+
     return SizedBox(
       width: 160,
       height: 160,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Webview(
-          _controller,
+          _controller!,
           permissionRequested: (url, kind, isUserInitiated) =>
               WebviewPermissionDecision.allow,
         ),
@@ -279,5 +298,63 @@ class _Rotating3DViewerState extends State<Rotating3DViewer> {
           ? '${_errorMessage!.substring(0, 50)}...'
           : _errorMessage!;
     }
+  }
+
+  /// 平台不支持提示
+  Widget _buildPlatformNotSupported() {
+    return SizedBox(
+      width: 160,
+      height: 160,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.blue.withOpacity(0.1),
+              Colors.cyan.withOpacity(0.05),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Colors.cyan.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.view_in_ar_outlined,
+                color: Colors.cyan.withOpacity(0.6),
+                size: 48,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '3D 模型预览',
+                style: TextStyle(
+                  color: Colors.cyan.withOpacity(0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(
+                  'Windows 平台可用',
+                  style: TextStyle(
+                    color: Colors.cyan.withOpacity(0.5),
+                    fontSize: 10,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

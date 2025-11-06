@@ -388,22 +388,12 @@ class DashboardProvider extends ChangeNotifier {
     // 从 deviceTrayMap 获取当前站台上的容器编号
     final containerCode = _deviceTrayMap[_selectedStation];
 
-    print('=== 检查当前站台容器 ===');
-    print('当前选中站台: $_selectedStation');
-    print('deviceTrayMap 内容: $_deviceTrayMap');
-    print('站台上的容器编号: $containerCode');
-    print('当前容器: $_currentContainer');
-
     if (containerCode != null && containerCode.isNotEmpty) {
       // 如果容器编号变化了，重新获取货物
       if (containerCode != _currentContainer) {
-        print('容器变化，重新获取货物: $containerCode');
         await _fetchGoods(containerCode);
-      } else {
-        print('容器未变化，不重新获取');
       }
     } else {
-      print('站台上没有容器，清空数据');
       // 站台上没有容器，清空数据
       if (_currentContainer.isNotEmpty) {
         _currentContainer = '';
@@ -416,11 +406,7 @@ class DashboardProvider extends ChangeNotifier {
   /// 获取容器货物信息
   /// 对应 Vue 中的 getGoods 和 getContainerGoods
   Future<void> _fetchGoods(String containerCode) async {
-    print('=== 开始获取货物信息 ===');
-    print('容器编码: $containerCode');
-
     if (containerCode.isEmpty || containerCode == '0') {
-      print('容器编码无效，清空数据');
       _currentGoods.clear();
       _currentContainer = '';
       notifyListeners();
@@ -433,41 +419,29 @@ class DashboardProvider extends ChangeNotifier {
       // 调用 WMS API 获取容器货物信息
       // 对应 Vue 版本的 API 配置: http://10.20.88.14:8008/api/warehouse
       final dio = Dio(BaseOptions(
-        baseUrl: 'http://10.20.88.14:8008/api/warehouse', // WMS API 地址（修正）
+        baseUrl: 'http://10.20.88.14:8008/api/warehouse',
         connectTimeout: const Duration(seconds: 10),
         headers: {'Cache-Control': 'no-cache'},
       ));
 
       final url = '/Inventory/container/$containerCode';
-      print('API 请求: http://10.20.88.14:8008/api/warehouse$url');
-
       final response = await dio.get(url);
-
-      print('API 响应状态码: ${response.statusCode}');
-      print('API 响应数据: ${response.data}');
 
       if (response.data != null && response.data['errCode'] == 0) {
         final goodsList = response.data['data'] as List?;
-        print('货物列表长度: ${goodsList?.length ?? 0}');
 
         if (goodsList != null) {
           _currentGoods.clear();
           _currentGoods.addAll(
             goodsList.map((item) => Goods.fromJson(item as Map<String, dynamic>)),
           );
-          print('成功加载 ${_currentGoods.length} 个货物');
-        } else {
-          print('货物列表为空');
         }
       } else {
-        print('API 返回错误: errCode=${response.data?['errCode']}, errMsg=${response.data?['errMsg']}');
         _currentGoods.clear();
       }
 
       notifyListeners();
     } catch (e) {
-      print('获取货物信息失败: $e');
-      print('错误堆栈: ${StackTrace.current}');
       _currentGoods.clear();
       notifyListeners();
     }

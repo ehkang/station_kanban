@@ -33,6 +33,9 @@ class Goods {
   /// 图片URL
   final String? imageUrl;
 
+  /// 3D模型文件URL（OBJ格式）
+  final String? modelFileUrl;
+
   /// 备注
   final String? remark;
 
@@ -54,6 +57,7 @@ class Goods {
     this.slotY,
     this.status,
     this.imageUrl,
+    this.modelFileUrl,
     this.remark,
     this.createTime,
     this.updateTime,
@@ -74,6 +78,7 @@ class Goods {
       slotY: _parseToInt(json['slotY']),
       status: _parseToInt(json['status']),
       imageUrl: json['imageUrl']?.toString(),
+      modelFileUrl: json['modelFileUrl']?.toString(),
       remark: json['remark']?.toString(),
       createTime: json['createTime'] != null
           ? DateTime.tryParse(json['createTime'].toString())

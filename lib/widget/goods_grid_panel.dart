@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../provider/dashboard_provider.dart';
 import '../model/goods.dart';
+import 'rotating_3d_viewer.dart';
 
 /// 货物网格面板
 /// 对应 Vue 项目中的中间货物展示区域
@@ -276,7 +277,7 @@ class GoodsGridPanel extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 货物编码
+                    // 顶部：编号标签
                     Row(
                       children: [
                         Container(
@@ -306,87 +307,99 @@ class GoodsGridPanel extends ConsumerWidget {
                       ],
                     ),
 
-                    const Spacer(),
-
-                    // 货物名称
-                    Text(
-                      goods.goodsName ?? goods.goodsCode,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
+                    // 中间：3D模型展示区域（用Expanded让它占据剩余空间）
+                    Expanded(
+                      child: Center(
+                        child: _build3DModelOrIcon(goods, index),
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
 
-                    const SizedBox(height: 6),
-
-                    // 货物编码
-                    Text(
-                      goods.goodsCode,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
-                        fontSize: 11,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // 数量信息 - 更醒目的显示
-                    if (goods.quantity != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.green.withOpacity(0.4),
-                              Colors.green.withOpacity(0.3),
-                            ],
+                    // 底部：文字信息（固定在底部）
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 货物名称
+                        Text(
+                          goods.goodsName ?? goods.goodsCode,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
                           ),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: Colors.green.withOpacity(0.8),
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.green.withOpacity(0.3),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                          ],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.analytics_outlined,
-                              color: Colors.greenAccent,
-                              size: 16,
+
+                        const SizedBox(height: 6),
+
+                        // 货物编码
+                        Text(
+                          goods.goodsCode,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // 数量信息 - 更醒目的显示
+                        if (goods.quantity != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
                             ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                '${goods.quantity} ${goods.unit ?? ''}',
-                                style: const TextStyle(
-                                  color: Colors.greenAccent,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.green.withOpacity(0.4),
+                                  Colors.green.withOpacity(0.3),
+                                ],
                               ),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Colors.green.withOpacity(0.8),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  spreadRadius: 1,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.analytics_outlined,
+                                  color: Colors.greenAccent,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    '${goods.quantity} ${goods.unit ?? ''}',
+                                    style: const TextStyle(
+                                      color: Colors.greenAccent,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -415,6 +428,57 @@ class GoodsGridPanel extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 3D模型或默认图标
+  ///
+  /// 策略：
+  /// - 如果goods.modelFileUrl有效 → 显示Rotating3DViewer
+  /// - 否则 → 使用测试URL或显示默认库存图标
+  ///
+  /// 性能优化：
+  /// - 第一行货物（0-4）立即加载
+  /// - 第二行货物（5-9）延迟500ms加载
+  Widget _build3DModelOrIcon(Goods goods, int index) {
+    // 🔧 测试模式：写死一个测试STL文件URL
+    const bool enableTestMode = true; // 测试完成后改为false
+    const String testStlUrl = 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=95602.00025';
+
+    // 检查是否有有效的模型URL
+    final hasValidModelUrl = goods.modelFileUrl != null &&
+        goods.modelFileUrl!.isNotEmpty &&
+        goods.modelFileUrl!.startsWith('http');
+
+    // 确定使用的URL（优先使用真实URL，否则使用测试URL）
+    String? stlUrl;
+    if (hasValidModelUrl) {
+      stlUrl = goods.modelFileUrl;
+    } else if (enableTestMode) {
+      stlUrl = testStlUrl;
+    }
+
+    if (stlUrl != null) {
+      // 计算延迟时间（第二行延迟加载）
+      final initDelay = index < 5 ? index * 100 : 500 + ((index - 5) * 100);
+
+      return Rotating3DViewer(
+        stlUrl: stlUrl,
+        initDelay: initDelay,
+      );
+    } else {
+      // 默认图标
+      return SizedBox(
+        width: 160,
+        height: 160,
+        child: Center(
+          child: Icon(
+            Icons.inventory_2,
+            color: Colors.cyan.withOpacity(0.4),
+            size: 64,
+          ),
+        ),
+      );
+    }
   }
 
   /// 空卡片

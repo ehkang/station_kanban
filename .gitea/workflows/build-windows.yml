@@ -49,7 +49,7 @@ jobs:
       uses: subosito/flutter-action@v2
       with:
         channel: 'stable'
-        flutter-version: '3.24.5'  # 锁定到已知可工作的版本
+        flutter-version: '3.32.5'  # 锁定到已知可工作的版本 (Dart 3.8.1)
         cache: true  # 启用 Flutter SDK 缓存
 
     - name: 缓存 Pub 依赖
@@ -58,9 +58,9 @@ jobs:
         path: |
           ${{ env.LOCALAPPDATA }}\Pub\Cache
           **/.dart_tool
-        key: ${{ runner.os }}-flutter-3.24.5-pub-${{ hashFiles('**/pubspec.lock') }}
+        key: ${{ runner.os }}-flutter-3.32.5-pub-${{ hashFiles('**/pubspec.lock') }}
         restore-keys: |
-          ${{ runner.os }}-flutter-3.24.5-pub-
+          ${{ runner.os }}-flutter-3.32.5-pub-
 
     - name: 启用 Windows 桌面支持
       run: flutter config --enable-windows-desktop

@@ -440,25 +440,22 @@ class GoodsGridPanel extends ConsumerWidget {
   /// - 第一行货物（0-4）立即加载
   /// - 第二行货物（5-9）延迟500ms加载
   Widget _build3DModelOrIcon(Goods goods, int index) {
-    // 🔧 测试模式：写死一个测试STL文件URL
-    const bool enableTestMode = true; // ✅ 使用 flutter_cube 渲染（轻量级，内存占用仅50-100MB）
-    const String testStlUrl = 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=95602.00025';
-    const int maxConcurrent3DModels = 3; // ✅ flutter_cube 可以同时渲染 3-5 个（vs CEF 只能1个）
+    // 🔧 测试模式：写死测试编码
+    const bool enableTestMode = true;
+    const String testGoodsNo = '30101.00005';
+    const String testStlUrl = 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=$testGoodsNo';
 
     // 检查是否有有效的模型URL
     final hasValidModelUrl = goods.modelFileUrl != null &&
         goods.modelFileUrl!.isNotEmpty &&
         goods.modelFileUrl!.startsWith('http');
 
-    // 确定使用的URL（优先使用真实URL，否则使用测试URL）
-    // ⚠️ 重要：只对前 maxConcurrent3DModels 个货物启用3D渲染
+    // 确定使用的URL
     String? stlUrl;
-    if (index < maxConcurrent3DModels) {
-      if (hasValidModelUrl) {
-        stlUrl = goods.modelFileUrl;
-      } else if (enableTestMode) {
-        stlUrl = testStlUrl;
-      }
+    if (hasValidModelUrl) {
+      stlUrl = goods.modelFileUrl;
+    } else if (enableTestMode) {
+      stlUrl = testStlUrl;
     }
 
     if (stlUrl != null) {

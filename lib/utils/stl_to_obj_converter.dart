@@ -72,8 +72,6 @@ class StlToObjConverter {
     // 读取三角形数量（4字节，小端序）
     final triangleCount = buffer.getUint32(80, Endian.little);
 
-    print('📦 Binary STL: $triangleCount 个三角形');
-
     final vertices = <_Vertex>[];
     final normals = <_Vector3>[];
     final faces = <_Face>[];
@@ -175,8 +173,6 @@ class StlToObjConverter {
       }
     }
 
-    print('📦 ASCII STL: $triangleCount 个三角形');
-
     return _generateObjString(vertices, normals, faces, optimize: optimize);
   }
 
@@ -210,8 +206,6 @@ class StlToObjConverter {
 
         newFaces.add(_Face(i1, i2, i3, face.normalIndex));
       }
-
-      print('✅ 优化: ${vertices.length} → ${uniqueVertices.length} 顶点');
 
       // 写入顶点
       for (final v in uniqueVertices) {

@@ -67,7 +67,6 @@ class _Cube3DViewerState extends State<Cube3DViewer>
   Future<void> _init() async {
     try {
       // 1. 下载 STL 文件
-      print('📥 下载 STL: ${widget.stlUrl}');
       final dio = Dio();
       final response = await dio.get<List<int>>(
         widget.stlUrl,
@@ -79,16 +78,12 @@ class _Cube3DViewerState extends State<Cube3DViewer>
       }
 
       final stlBytes = Uint8List.fromList(response.data!);
-      print('✅ 下载完成: ${stlBytes.length} 字节');
 
       // 2. 转换 STL → OBJ
-      print('🔄 转换 STL → OBJ...');
       final objString = StlToObjConverter.convert(stlBytes, optimize: true);
-      print('✅ 转换完成: ${objString.length} 字符');
 
       // 3. 解析 OBJ 为 Mesh
       final mesh = _parseObjToMesh(objString);
-      print('✅ Mesh 创建: ${mesh.vertices.length} 顶点, ${mesh.indices.length} 三角形');
 
       // 4. 创建 Object 和 Scene（等待 onSceneCreated 回调）
       if (mounted) {
@@ -101,9 +96,7 @@ class _Cube3DViewerState extends State<Cube3DViewer>
           _isLoading = false;
         });
       }
-    } catch (e, stackTrace) {
-      print('❌ 加载失败: $e');
-      print(stackTrace);
+    } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -200,9 +193,6 @@ class _Cube3DViewerState extends State<Cube3DViewer>
     // 目标尺寸
     final targetSize = 5.0;
     final scale = targetSize / maxSize;
-
-    print('📐 模型尺寸: ${sizeX.toStringAsFixed(2)} x ${sizeY.toStringAsFixed(2)} x ${sizeZ.toStringAsFixed(2)}');
-    print('🔍 缩放比例: ${scale.toStringAsFixed(4)}');
 
     // 平移到中心并缩放
     for (final v in vertices) {

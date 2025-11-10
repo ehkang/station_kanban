@@ -89,13 +89,10 @@ class DashboardProvider extends ChangeNotifier {
 
       if (savedStation != null && availableStations.contains(savedStation)) {
         _selectedStation = savedStation;
-        print('加载保存的站台: $savedStation');
         notifyListeners();
-      } else {
-        print('没有保存的站台或站台无效，使用默认值: $_selectedStation');
       }
     } catch (e) {
-      print('加载保存的站台失败: $e');
+      // 静默失败，使用默认站台
     }
   }
 
@@ -104,9 +101,8 @@ class DashboardProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_selectedStationKey, station);
-      print('保存站台选择: $station');
     } catch (e) {
-      print('保存站台失败: $e');
+      // 静默失败
     }
   }
 

@@ -104,13 +104,13 @@ class WebView3DHTML {
         async function loadThreeJS() {
             for (let i = 0; i < CDN_LIST.length; i++) {
                 try {
-                    console.log(\`尝试CDN \${i + 1}: \${CDN_LIST[i].three}\`);
+                    console.log(`尝试CDN \${i + 1}: \${CDN_LIST[i].three}`);
                     await loadScript(CDN_LIST[i].three);
                     await loadScript(CDN_LIST[i].loader);
-                    console.log(\`CDN \${i + 1} 加载成功\`);
+                    console.log(`CDN \${i + 1} 加载成功`);
                     return true;
                 } catch (error) {
-                    console.error(\`CDN \${i + 1} 加载失败:\`, error);
+                    console.error(`CDN \${i + 1} 加载失败:`, error);
                     if (i === CDN_LIST.length - 1) {
                         throw new Error('所有CDN加载失败');
                     }
@@ -243,7 +243,7 @@ class WebView3DHTML {
                         // 加载进度（可选）
                         if (xhr.lengthComputable) {
                             const percentComplete = xhr.loaded / xhr.total * 100;
-                            console.log(\`加载进度: \${percentComplete.toFixed(0)}%\`);
+                            console.log(`加载进度: \${percentComplete.toFixed(0)}%`);
                         }
                     },
                     function(error) {

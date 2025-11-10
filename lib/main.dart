@@ -10,6 +10,10 @@ import 'page/dashboard_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ⚠️ 注意：不在这里初始化 WebviewManager
+  // WebView CEF 会在第一次创建 WebViewController 时自动初始化
+  // 提前初始化会导致创建额外的窗口和 OpenGL context 错误
+
   // 桌面平台窗口管理配置
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
@@ -65,11 +69,10 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF00d4ff),
         scaffoldBackgroundColor: const Color(0xFF0a0e27),
-        colorScheme: ColorScheme.dark(
-          primary: const Color(0xFF00d4ff),
-          secondary: const Color(0xFF0099ff),
-          surface: const Color(0xFF1a1f3a),
-          background: const Color(0xFF0a0e27),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF00d4ff),
+          secondary: Color(0xFF0099ff),
+          surface: Color(0xFF1a1f3a),
         ),
         fontFamily: 'sans-serif',
       ),

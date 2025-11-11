@@ -64,6 +64,30 @@ class _Cube3DViewerState extends State<Cube3DViewer>
     }
   }
 
+  @override
+  void didUpdateWidget(Cube3DViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // 如果 URL 变化了，重新加载模型（共存亡原则）
+    if (oldWidget.stlUrl != widget.stlUrl) {
+      // 清空旧数据，重置状态
+      setState(() {
+        _object = null;
+        _scene = null;
+        _isLoading = true;
+        _hasError = false;
+        _errorMessage = null;
+      });
+
+      // 重新加载
+      if (widget.initDelay > 0) {
+        Future.delayed(Duration(milliseconds: widget.initDelay), _init);
+      } else {
+        _init();
+      }
+    }
+  }
+
   Future<void> _init() async {
     try {
       // 1. 下载 STL 文件
@@ -246,6 +270,7 @@ class _Cube3DViewerState extends State<Cube3DViewer>
 
   Widget _buildContent() {
     if (_hasError) {
+      // 友好提示：没有模型，不显示错误详情
       return Container(
         color: Colors.cyan.withOpacity(0.05),
         child: Center(
@@ -253,26 +278,19 @@ class _Cube3DViewerState extends State<Cube3DViewer>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.error_outline,
-                color: Colors.red.withOpacity(0.6),
+                Icons.insert_drive_file_outlined,
+                color: Colors.cyan.withOpacity(0.3),
                 size: 48,
               ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    _errorMessage!,
-                    style: TextStyle(
-                      color: Colors.red.withOpacity(0.6),
-                      fontSize: 10,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              const SizedBox(height: 12),
+              Text(
+                '暂无模型',
+                style: TextStyle(
+                  color: Colors.cyan.withOpacity(0.5),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
                 ),
-              ],
+              ),
             ],
           ),
         ),

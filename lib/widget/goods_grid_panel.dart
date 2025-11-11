@@ -53,7 +53,7 @@ class GoodsGridPanel extends ConsumerWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: _buildGoodsGrid(displayGoods),
+              child: _buildGoodsGrid(displayGoods, currentContainer),
             ),
           ),
         ],
@@ -162,7 +162,7 @@ class GoodsGridPanel extends ConsumerWidget {
   }
 
   /// 5x2 货物网格
-  Widget _buildGoodsGrid(List<Goods> goods) {
+  Widget _buildGoodsGrid(List<Goods> goods, String containerCode) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cellWidth = (constraints.maxWidth - 32) / 5; // 5 列
@@ -179,7 +179,7 @@ class GoodsGridPanel extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: index < goods.length
-                          ? _buildGoodsCard(goods[index], index)
+                          ? _buildGoodsCard(goods[index], index, containerCode)
                           : _buildEmptyCard(index),
                     ),
                   );
@@ -196,7 +196,7 @@ class GoodsGridPanel extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: index < goods.length
-                          ? _buildGoodsCard(goods[index], index)
+                          ? _buildGoodsCard(goods[index], index, containerCode)
                           : _buildEmptyCard(index),
                     ),
                   );
@@ -210,7 +210,7 @@ class GoodsGridPanel extends ConsumerWidget {
   }
 
   /// 货物卡片
-  Widget _buildGoodsCard(Goods goods, int index) {
+  Widget _buildGoodsCard(Goods goods, int index, String containerCode) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 300 + (index * 50)),
@@ -290,7 +290,7 @@ class GoodsGridPanel extends ConsumerWidget {
                     // 中间：3D模型展示区域（用Expanded让它占据剩余空间）
                     Expanded(
                       child: Center(
-                        child: _build3DModelOrIcon(goods, index),
+                        child: _build3DModelOrIcon(goods, index, containerCode),
                       ),
                     ),
 
@@ -393,53 +393,36 @@ class GoodsGridPanel extends ConsumerWidget {
   /// 3D模型或默认图标
   ///
   /// 策略：
-  /// - 如果goods.modelFileUrl有效 → 显示Rotating3DViewer
-  /// - 否则 → 使用测试URL或显示默认库存图标
+  /// - 使用基础URL + 料号拼接获取STL文件
+  /// - 测试模式：使用写死的料号（testGoodsNo）
+  /// - 生产模式：使用实际料号（goods.goodsCode）
   ///
   /// 性能优化：
-  /// - 第一行货物（0-4）立即加载
-  /// - 第二行货物（5-9）延迟500ms加载
-  Widget _build3DModelOrIcon(Goods goods, int index) {
-    // 🔧 测试模式：写死测试编码
+  /// - 各货物错开加载（index * 200ms），避免同时下载STL文件
+  Widget _build3DModelOrIcon(Goods goods, int index, String containerCode) {
+    // 🔧 测试模式：控制是否写死料号
     const bool enableTestMode = false;
-    const String testGoodsNo = '30101.00005';
-    const String testStlUrl = 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=$testGoodsNo';
+    const String testGoodsNo = '35101.00787';
 
-    // 检查是否有有效的模型URL
-    final hasValidModelUrl = goods.modelFileUrl != null &&
-        goods.modelFileUrl!.isNotEmpty &&
-        goods.modelFileUrl!.startsWith('http');
+    // 3D模型API基础URL
+    const String baseUrl = 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=';
 
-    // 确定使用的URL
-    String? stlUrl;
-    if (hasValidModelUrl) {
-      stlUrl = goods.modelFileUrl;
-    } else if (enableTestMode) {
-      stlUrl = testStlUrl;
-    }
+    // 确定料号
+    final goodsNo = enableTestMode ? testGoodsNo : goods.goodsCode;
 
-    if (stlUrl != null) {
-      // 计算延迟时间（避免同时下载，错开加载）
-      final initDelay = index * 200;
+    // 拼接完整URL
+    final stlUrl = '$baseUrl$goodsNo';
 
-      return Cube3DViewer(
-        stlUrl: stlUrl,
-        initDelay: initDelay,
-      );
-    } else {
-      // 默认图标
-      return SizedBox(
-        width: 160,
-        height: 160,
-        child: Center(
-          child: Icon(
-            Icons.inventory_2,
-            color: Colors.cyan.withOpacity(0.4),
-            size: 64,
-          ),
-        ),
-      );
-    }
+    // 计算延迟时间（避免同时下载，错开加载）
+    final initDelay = index * 200;
+
+    // 使用 容器编码+料号 作为 Key，确保切换容器时强制重建
+    // 这样即使料号相同，只要容器变了，3D Viewer 也会重新创建
+    return Cube3DViewer(
+      key: ValueKey('$containerCode-$goodsNo'),
+      stlUrl: stlUrl,
+      initDelay: initDelay,
+    );
   }
 
   /// 空卡片

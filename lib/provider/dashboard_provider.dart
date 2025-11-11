@@ -47,6 +47,8 @@ class DashboardProvider extends ChangeNotifier {
   DashboardProvider(this._signalRService) {
     _loadSavedStation();
     _initSignalR();
+    // 主动查询设备初始状态（不等 WebSocket 连接）
+    _initGetDeviceInfo();
   }
 
   // Getters
@@ -146,23 +148,8 @@ class DashboardProvider extends ChangeNotifier {
   /// 对应 Vue 中的 updateDevice 方法
   void updateDevice(String deviceNo, Map<String, dynamic> newInfo) {
     try {
-      // Vue 项目中的字段名可能是 'code' 而不是 'deviceCode'
-      // 需要做字段映射
-      final mappedInfo = <String, dynamic>{};
-
-      // 字段名映射：Vue (code) -> Flutter (deviceCode)
-      newInfo.forEach((key, value) {
-        if (key == 'code') {
-          mappedInfo['deviceCode'] = value;
-        } else if (key == 'name') {
-          mappedInfo['deviceName'] = value;
-        } else if (key == 'childrenDevice') {
-          // Vue 中是 childrenDevice，Flutter 中是 children
-          mappedInfo['children'] = value;
-        } else {
-          mappedInfo[key] = value;
-        }
-      });
+      // 使用统一的字段映射方法
+      final mappedInfo = _mapDeviceFields(newInfo);
 
       // 确保 deviceCode 字段存在
       if (!mappedInfo.containsKey('deviceCode')) {
@@ -372,10 +359,100 @@ class DashboardProvider extends ChangeNotifier {
     _currentContainer = '';
     _currentGoods.clear();
 
-    // 检查新站台的容器和货物
-    await _checkCurrentStationContainer();
+    // 主动查询设备状态（不依赖 WebSocket 推送）
+    // 对应 Vue 版本：切换站台时重新初始化设备信息
+    await _initGetDeviceInfo();
 
     notifyListeners();
+  }
+
+  /// 主动查询设备初始状态
+  /// 对应 Vue 中的 initGetDeviceInfo
+  /// 在程序初始化和切换站台时调用，不依赖 WebSocket 连接
+  Future<void> _initGetDeviceInfo() async {
+    try {
+      // WCS API 配置（对应 Vue 版本的 wcsAPI）
+      final dio = Dio(BaseOptions(
+        baseUrl: 'http://10.20.88.14:8009/api/WCS',
+        connectTimeout: const Duration(seconds: 10),
+        headers: {'Cache-Control': 'no-cache'},
+      ));
+
+      // 监控的设备列表（对应 Vue 版本的 watchDeviceCodes + coordinateDevices）
+      final watchDevices = ['Crn2002', 'TranLine3000', 'Crn2001', 'RGV01'];
+
+      for (final deviceCode in watchDevices) {
+        try {
+          // 调用 WCS API 获取设备状态
+          final response = await dio.get('/getDevice/$deviceCode');
+
+          if (response.data != null) {
+            final deviceInfo = response.data as Map<String, dynamic>;
+
+            // 处理子设备（如 TranLine3000 下的 Tran3001, Tran3002...）
+            if (deviceInfo['childrenDevice'] != null) {
+              final children = deviceInfo['childrenDevice'] as List?;
+              if (children != null && children.isNotEmpty) {
+                for (final child in children) {
+                  final childData = child as Map<String, dynamic>;
+                  final childCode = childData['code'] as String?;
+                  if (childCode != null) {
+                    // 直接存储子设备（不触发 updateDevice，避免重复处理）
+                    final device = Device.fromJson(_mapDeviceFields(childData));
+                    _devices[childCode] = device;
+
+                    // 更新站台名称（如果这是当前选中的站台）
+                    if (childCode == _selectedStation) {
+                      _stationName = device.deviceName ?? device.deviceCode;
+                    }
+                  }
+                }
+              }
+            } else {
+              // 处理独立设备
+              final device = Device.fromJson(_mapDeviceFields(deviceInfo));
+              _devices[deviceCode] = device;
+
+              if (deviceCode == _selectedStation) {
+                _stationName = device.deviceName ?? device.deviceCode;
+              }
+            }
+          }
+        } catch (e) {
+          print('设备 $deviceCode 初始化失败: $e');
+          // 继续查询其他设备
+        }
+      }
+
+      // 批量初始化完成后，统一处理一次（更新托盘映射、检查站台）
+      _updateDeviceTrayMap();
+      await _checkCurrentStationContainer();
+      notifyListeners();
+    } catch (e) {
+      print('初始化设备信息失败: $e');
+      // 3秒后重试（对应 Vue 版本的重试逻辑）
+      Future.delayed(const Duration(seconds: 3), _initGetDeviceInfo);
+    }
+  }
+
+  /// 字段名映射：Vue API (code, name, childrenDevice) -> Flutter (deviceCode, deviceName, children)
+  /// 提取为独立方法，供 initGetDeviceInfo 和 updateDevice 复用
+  Map<String, dynamic> _mapDeviceFields(Map<String, dynamic> rawData) {
+    final mappedInfo = <String, dynamic>{};
+
+    rawData.forEach((key, value) {
+      if (key == 'code') {
+        mappedInfo['deviceCode'] = value;
+      } else if (key == 'name') {
+        mappedInfo['deviceName'] = value;
+      } else if (key == 'childrenDevice') {
+        mappedInfo['children'] = value;
+      } else {
+        mappedInfo[key] = value;
+      }
+    });
+
+    return mappedInfo;
   }
 
   /// 检查当前站台的容器和货物

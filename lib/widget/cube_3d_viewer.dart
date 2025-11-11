@@ -91,7 +91,7 @@ class _Cube3DViewerState extends State<Cube3DViewer>
           _object = Object(
             mesh: mesh,
             backfaceCulling: false,
-            lighting: true,
+            lighting: true, // 启用光照
           );
           _isLoading = false;
         });
@@ -208,8 +208,24 @@ class _Cube3DViewerState extends State<Cube3DViewer>
     // 设置相机
     scene.camera.position.z = 10;
 
+    // 设置光照（增强亮度）- 更亮的白光
+    scene.light.position.setFrom(Vector3(10, 10, 10));
+    scene.light.setColor(
+      const Color(0xFFFFFFFF),  // 纯白光
+      0.4,   // ambient: 40% 环境光（提高整体亮度）
+      1.0,   // diffuse: 100% 漫反射光（最强）
+      0.9,   // specular: 90% 高光（强金属反射）
+    );
+
     // 添加对象到场景
     if (_object != null) {
+      // 浅色不锈钢材质：银白色金属质感
+      // Vector3(R, G, B) 范围 0.0-1.0
+      _object!.mesh.material.ambient = Vector3.all(0.7);   // 高亮度环境光（70% 银白色）
+      _object!.mesh.material.diffuse = Vector3.all(0.95);  // 高亮度漫反射（95% 银白色）
+      _object!.mesh.material.specular = Vector3.all(1.0);  // 纯白高光（金属质感）
+      _object!.mesh.material.shininess = 80.0;             // 高光泽度（不锈钢效果）
+
       scene.world.add(_object!);
     }
   }
@@ -222,13 +238,9 @@ class _Cube3DViewerState extends State<Cube3DViewer>
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      height: 160,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: _buildContent(),
-      ),
+    // 包装抗锯齿容器以改善边缘质量
+    return RepaintBoundary(
+      child: _buildContent(),
     );
   }
 

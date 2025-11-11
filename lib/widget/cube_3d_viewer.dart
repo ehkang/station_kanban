@@ -34,25 +34,34 @@ class _Cube3DViewerState extends State<Cube3DViewer>
   String? _errorMessage;
 
   late AnimationController _animationController;
+  DateTime _lastUpdateTime = DateTime.now();
 
   @override
   void initState() {
     super.initState();
 
-    // 旋转动画控制器（6秒一圈）
+    // 旋转动画控制器（12秒一圈，但限制为 25fps 以提升性能）
     _animationController = AnimationController(
-      duration: const Duration(seconds: 6),
+      duration: const Duration(seconds: 12),  // 6秒 → 12秒（速度降低一半）
       vsync: this,
     )
       ..addListener(() {
         if (_object != null && _scene != null) {
-          // 方案1：倾斜 + Y轴旋转（能看到立体全貌）
-          _object!.rotation.x = 25; // 向前倾斜25度（显示顶部）
-          _object!.rotation.z = 15; // 侧倾15度（增加动态感）
-          _object!.rotation.y = _animationController.value * 360; // 绕Y轴旋转
+          // 限制帧率为 25fps（每 40ms 更新一次）
+          final now = DateTime.now();
+          final elapsed = now.difference(_lastUpdateTime).inMilliseconds;
 
-          _object!.updateTransform();
-          _scene!.update();
+          if (elapsed >= 40) {  // 40ms = 1000ms / 25fps
+            _lastUpdateTime = now;
+
+            // 方案1：倾斜 + Y轴旋转（能看到立体全貌）
+            _object!.rotation.x = 25; // 向前倾斜25度（显示顶部）
+            _object!.rotation.z = 15; // 侧倾15度（增加动态感）
+            _object!.rotation.y = _animationController.value * 360; // 绕Y轴旋转
+
+            _object!.updateTransform();
+            _scene!.update();
+          }
         }
       })
       ..repeat();

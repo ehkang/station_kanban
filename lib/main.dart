@@ -26,13 +26,20 @@ void main() async {
       skipTaskbar: false,
       titleBarStyle: TitleBarStyle.hidden,
       title: '仓库管理系统看板',
+      // Windows 真全屏关键配置
+      fullScreen: true,  // 启用全屏模式
+      alwaysOnTop: false,  // 不需要置顶（全屏已经覆盖）
     );
 
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
-      // 可选：全屏模式
-      // await windowManager.setFullScreen(true);
+
+      // Windows 真全屏：必须调用 setFullScreen
+      await windowManager.setFullScreen(true);
+
+      // 确保窗口在最前面
+      await windowManager.setAlwaysOnTop(false);
     });
   }
 

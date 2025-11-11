@@ -226,30 +226,24 @@ class GoodsGridPanel extends ConsumerWidget {
       },
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFF2a4f7f).withOpacity(0.9),
-              const Color(0xFF1a3f6f).withOpacity(0.7),
-            ],
-          ),
+          // 透明背景 - 使用父容器背景色
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Colors.blue.withOpacity(0.5),
-            width: 2,
+            color: Colors.cyan.withOpacity(0.4),
+            width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.blue.withOpacity(0.3),
-              blurRadius: 15,
+              color: Colors.cyan.withOpacity(0.2),
+              blurRadius: 12,
               offset: const Offset(0, 4),
-              spreadRadius: 2,
+              spreadRadius: 1,
             ),
             BoxShadow(
-              color: Colors.cyan.withOpacity(0.2),
-              blurRadius: 25,
-              offset: const Offset(0, 8),
+              color: Colors.blue.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -257,20 +251,6 @@ class GoodsGridPanel extends ConsumerWidget {
           borderRadius: BorderRadius.circular(10),
           child: Stack(
             children: [
-              // 背景渐变
-              Container(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment.topLeft,
-                    radius: 1.5,
-                    colors: [
-                      Colors.blue.withOpacity(0.1),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-
               // 内容
               Padding(
                 padding: const EdgeInsets.all(12.0),
@@ -403,26 +383,6 @@ class GoodsGridPanel extends ConsumerWidget {
                   ],
                 ),
               ),
-
-              // 右上角装饰
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topRight,
-                      end: Alignment.bottomLeft,
-                      colors: [
-                        Colors.cyan.withOpacity(0.3),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -441,7 +401,7 @@ class GoodsGridPanel extends ConsumerWidget {
   /// - 第二行货物（5-9）延迟500ms加载
   Widget _build3DModelOrIcon(Goods goods, int index) {
     // 🔧 测试模式：写死测试编码
-    const bool enableTestMode = true;
+    const bool enableTestMode = false;
     const String testGoodsNo = '30101.00005';
     const String testStlUrl = 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=$testGoodsNo';
 

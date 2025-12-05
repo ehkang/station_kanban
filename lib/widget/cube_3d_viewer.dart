@@ -184,6 +184,15 @@ class _Cube3DViewerState extends State<Cube3DViewer>
           'type': e.type.toString(),
           'message': e.message ?? '未知',
           'error': e.error?.toString() ?? '未知',
+          // 记录请求信息
+          'requestMethod': e.requestOptions.method,
+          'requestHeaders': e.requestOptions.headers.toString(),
+          // 记录响应头
+          'responseHeaders': e.response?.headers.toString() ?? '无',
+          'contentType': e.response?.headers.value('content-type') ?? '未知',
+          // 记录响应体内容（智能处理）
+          'responseBody': _formatResponseBody(e.response?.data),
+          'responseBodySize': _getResponseBodySize(e.response?.data),
         },
       );
 
@@ -238,6 +247,73 @@ class _Cube3DViewerState extends State<Cube3DViewer>
       case DioExceptionType.unknown:
       default:
         return '未知网络错误: ${e.message ?? "无详细信息"}';
+    }
+  }
+
+  /// 智能格式化响应体内容（用于日志）
+  String _formatResponseBody(dynamic data) {
+    if (data == null) return '无响应体';
+
+    try {
+      // 1. 字符串类型（HTML、JSON、纯文本等）
+      if (data is String) {
+        // 限制长度，避免日志过大
+        if (data.length > 2000) {
+          return '${data.substring(0, 2000)}... [已截断，总长度: ${data.length} 字符]';
+        }
+        return data;
+      }
+
+      // 2. 二进制数据（List<int>, Uint8List 等）
+      if (data is List<int>) {
+        final sizeKB = (data.length / 1024).toStringAsFixed(2);
+        // 显示前16字节的十六进制表示
+        final preview = data.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+        return '[二进制数据] 大小: $sizeKB KB, 前16字节: $preview...';
+      }
+
+      // 3. Map/JSON 对象
+      if (data is Map) {
+        final jsonStr = data.toString();
+        if (jsonStr.length > 2000) {
+          return '${jsonStr.substring(0, 2000)}... [JSON已截断]';
+        }
+        return jsonStr;
+      }
+
+      // 4. 其他类型
+      final str = data.toString();
+      if (str.length > 2000) {
+        return '${str.substring(0, 2000)}... [已截断]';
+      }
+      return str;
+    } catch (e) {
+      return '[格式化失败: $e]';
+    }
+  }
+
+  /// 获取响应体大小
+  String _getResponseBodySize(dynamic data) {
+    if (data == null) return '0 bytes';
+
+    try {
+      if (data is String) {
+        final bytes = data.length;
+        if (bytes < 1024) return '$bytes bytes';
+        if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
+        return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+      }
+
+      if (data is List<int>) {
+        final bytes = data.length;
+        if (bytes < 1024) return '$bytes bytes';
+        if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(2)} KB';
+        return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+      }
+
+      return '未知';
+    } catch (e) {
+      return '计算失败';
     }
   }
 

@@ -43,6 +43,7 @@ dependencies:
   flutter_cube: ^0.1.1  # 轻量级3D渲染（替代CEF，内存占用仅50-100MB）
   launch_at_startup: ^0.5.1  # 开机自启动（最新版）
   package_info_plus: ^9.0.0  # 获取应用信息（最新版）
+  path_provider: ^2.1.5  # 获取应用目录路径（用于日志文件）
 
 dev_dependencies:
   flutter_test:

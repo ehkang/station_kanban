@@ -1,8 +1,10 @@
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_cube/flutter_cube.dart';
 import 'package:dio/dio.dart';
 import '../utils/stl_to_obj_converter.dart';
+import '../utils/error_logger.dart';
 
 /// 基于 flutter_cube 的 3D 模型查看器
 ///
@@ -98,25 +100,66 @@ class _Cube3DViewerState extends State<Cube3DViewer>
   }
 
   Future<void> _init() async {
+    final logger = ErrorLogger();
+    DioException? dioError;
+
     try {
       // 1. 下载 STL 文件
-      final dio = Dio();
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+      ));
+
       final response = await dio.get<List<int>>(
         widget.stlUrl,
         options: Options(responseType: ResponseType.bytes),
       );
 
+      // 检查 HTTP 状态码
+      if (response.statusCode != 200) {
+        await logger.logNetworkError(
+          url: widget.stlUrl,
+          errorMessage: 'HTTP 状态码异常',
+          statusCode: response.statusCode,
+          responseData: {
+            'statusMessage': response.statusMessage ?? '未知',
+          },
+        );
+        throw Exception('HTTP ${response.statusCode}: ${response.statusMessage}');
+      }
+
+      // 检查响应数据
       if (response.data == null || response.data!.isEmpty) {
+        await logger.logNetworkError(
+          url: widget.stlUrl,
+          errorMessage: 'STL 文件为空 (0 bytes)',
+          statusCode: response.statusCode,
+        );
         throw Exception('STL 文件为空');
       }
 
       final stlBytes = Uint8List.fromList(response.data!);
+      final fileSizeKB = (stlBytes.length / 1024).toStringAsFixed(2);
 
       // 2. 转换 STL → OBJ
       final objString = StlToObjConverter.convert(stlBytes, optimize: true);
 
       // 3. 解析 OBJ 为 Mesh
       final mesh = _parseObjToMesh(objString);
+
+      // 验证网格数据
+      if (mesh.vertices.isEmpty) {
+        await logger.log3DModelError(
+          modelUrl: widget.stlUrl,
+          errorMessage: '3D 模型解析失败：顶点数量为 0',
+          additionalInfo: {
+            'fileSize': '$fileSizeKB KB',
+            'meshVertices': mesh.vertices.length,
+            'meshIndices': mesh.indices.length,
+          },
+        );
+        throw Exception('3D 模型解析失败：顶点数量为 0');
+      }
 
       // 4. 创建 Object 和 Scene（等待 onSceneCreated 回调）
       if (mounted) {
@@ -129,7 +172,42 @@ class _Cube3DViewerState extends State<Cube3DViewer>
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } on DioException catch (e) {
+      dioError = e;
+
+      // 详细记录网络错误
+      await logger.logNetworkError(
+        url: widget.stlUrl,
+        errorMessage: _getDioErrorMessage(e),
+        statusCode: e.response?.statusCode,
+        responseData: {
+          'type': e.type.toString(),
+          'message': e.message ?? '未知',
+          'error': e.error?.toString() ?? '未知',
+        },
+      );
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+          _errorMessage = _getDioErrorMessage(e);
+        });
+      }
+    } catch (e, stackTrace) {
+      // 记录详细错误信息到日志文件
+      await logger.log3DModelError(
+        modelUrl: widget.stlUrl,
+        errorMessage: e.toString(),
+        stackTrace: stackTrace,
+        additionalInfo: {
+          'platform': Platform.operatingSystem,
+          'platformVersion': Platform.operatingSystemVersion,
+          'isDioError': dioError != null,
+          'errorType': e.runtimeType.toString(),
+        },
+      );
+
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -137,6 +215,29 @@ class _Cube3DViewerState extends State<Cube3DViewer>
           _errorMessage = e.toString();
         });
       }
+    }
+  }
+
+  /// 获取 Dio 错误的友好消息
+  String _getDioErrorMessage(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+        return '连接超时，请检查网络';
+      case DioExceptionType.sendTimeout:
+        return '发送超时';
+      case DioExceptionType.receiveTimeout:
+        return '接收超时';
+      case DioExceptionType.badResponse:
+        return 'HTTP ${e.response?.statusCode}: ${e.response?.statusMessage ?? "服务器响应错误"}';
+      case DioExceptionType.cancel:
+        return '请求已取消';
+      case DioExceptionType.connectionError:
+        return '网络连接失败，请检查网络设置';
+      case DioExceptionType.badCertificate:
+        return 'SSL 证书验证失败';
+      case DioExceptionType.unknown:
+      default:
+        return '未知网络错误: ${e.message ?? "无详细信息"}';
     }
   }
 

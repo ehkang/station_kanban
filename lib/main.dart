@@ -6,11 +6,17 @@ import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io';
 import 'page/dashboard_page.dart';
+import 'utils/error_logger.dart';
 
 /// 应用入口
 /// 配置 1920x1080 全屏显示
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 初始化错误日志系统
+  final errorLogger = ErrorLogger();
+  await errorLogger.initialize();
+  print('✅ 错误日志已初始化: ${errorLogger.logFilePath}');
 
   // 配置开机自启动（仅 Windows 和 macOS）
   if (Platform.isWindows || Platform.isMacOS) {

@@ -12,8 +12,8 @@ import 'page/dashboard_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 配置开机自启动
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+  // 配置开机自启动（仅 Windows 和 macOS）
+  if (Platform.isWindows || Platform.isMacOS) {
     PackageInfo packageInfo = await PackageInfo.fromPlatform();
 
     launchAtStartup.setup(

@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../provider/dashboard_provider.dart';
 import '../widget/header_bar.dart';
-import '../widget/tray_list_panel.dart';
 import '../widget/goods_grid_panel.dart';
-import '../widget/log_panel.dart';
 import '../widget/star_background.dart';
 
 /// Dashboard 主界面
@@ -31,35 +29,11 @@ class DashboardPage extends ConsumerWidget {
                 // 顶部标题栏
                 const HeaderBar(),
 
-                // 主体内容区域
+                // 主体内容区域 - 只显示货物网格
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 左侧托盘列表（固定宽度 350）
-                        const SizedBox(
-                          width: 350,
-                          child: TrayListPanel(),
-                        ),
-
-                        const SizedBox(width: 16),
-
-                        // 中间货物网格区域（自适应宽度）
-                        const Expanded(
-                          child: GoodsGridPanel(),
-                        ),
-
-                        const SizedBox(width: 16),
-
-                        // 右侧日志面板（固定宽度 400）
-                        const SizedBox(
-                          width: 400,
-                          child: LogPanel(),
-                        ),
-                      ],
-                    ),
+                    child: const GoodsGridPanel(),
                   ),
                 ),
               ],

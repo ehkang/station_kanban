@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:launch_at_startup/launch_at_startup.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io';
 import 'page/dashboard_page.dart';
 
@@ -9,6 +11,25 @@ import 'page/dashboard_page.dart';
 /// 配置 1920x1080 全屏显示
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 配置开机自启动
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+
+    launchAtStartup.setup(
+      appName: packageInfo.appName,
+      appPath: Platform.resolvedExecutable,
+      // Windows MSIX 打包时需要指定 packageName
+      // packageName: 'com.yourcompany.wms_station_kanban',
+    );
+
+    // 启用自启动
+    await launchAtStartup.enable();
+
+    // 可选：检查是否已启用（调试用）
+    // bool isEnabled = await launchAtStartup.isEnabled();
+    // print('自启动状态: $isEnabled');
+  }
 
   // ⚠️ 注意：不在这里初始化 WebviewManager
   // WebView CEF 会在第一次创建 WebViewController 时自动初始化

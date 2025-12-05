@@ -1,13 +1,13 @@
 import 'dart:io';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 /// 错误日志记录器
 ///
 /// 将错误信息详细记录到 error.log 文件中
-/// 日志位置：
-/// - Windows: C:\Users\{用户名}\AppData\Roaming\{appName}\error.log
-/// - Linux: /home/{用户名}/.local/share/{appName}/error.log
+/// 日志位置：程序可执行文件所在目录
+/// - Windows: {程序目录}\error.log
+/// - Linux: {程序目录}/error.log
 class ErrorLogger {
   static final ErrorLogger _instance = ErrorLogger._internal();
   factory ErrorLogger() => _instance;
@@ -24,9 +24,10 @@ class ErrorLogger {
     if (_initialized) return;
 
     try {
-      // 获取应用数据目录
-      final directory = await getApplicationSupportDirectory();
-      _logFile = File('${directory.path}/$_logFileName');
+      // 获取可执行文件所在目录
+      final executablePath = Platform.resolvedExecutable;
+      final executableDir = path.dirname(executablePath);
+      _logFile = File(path.join(executableDir, _logFileName));
 
       // 如果日志文件过大，进行轮转（重命名旧文件）
       if (await _logFile!.exists()) {

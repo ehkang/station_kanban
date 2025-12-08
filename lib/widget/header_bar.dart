@@ -2,16 +2,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:signalr_netcore/signalr_client.dart';
 import '../provider/dashboard_provider.dart';
+import '../provider/dual_station_provider.dart';
 
 /// 顶部标题栏
 /// 对应 Vue 项目中的 header 部分
+/// 支持单站台和双站台模式
 class HeaderBar extends ConsumerWidget {
-  const HeaderBar({super.key});
+  final bool isDualStation;
+
+  const HeaderBar({
+    super.key,
+    this.isDualStation = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = ref.watch(dashboardProvider);
-    final isConnected = provider.isConnected;
+    // 根据模式选择对应的 provider
+    final connectionState = isDualStation
+        ? ref.watch(dualStationProvider.select((p) => p.connectionState))
+        : ref.watch(dashboardProvider.select((p) => p.connectionState));
+
+    final reconnectCount = isDualStation
+        ? ref.watch(dualStationProvider.select((p) => p.reconnectCount))
+        : ref.watch(dashboardProvider.select((p) => p.reconnectCount));
 
     return Container(
       height: 80,
@@ -72,7 +85,7 @@ class HeaderBar extends ConsumerWidget {
               ),
             ),
 
-            // 居中标题文字（渐变效果）- 显示站台编号
+            // 居中标题文字（渐变效果）
             Center(
               child: ShaderMask(
                 shaderCallback: (bounds) => const LinearGradient(
@@ -82,7 +95,9 @@ class HeaderBar extends ConsumerWidget {
                   ],
                 ).createShader(bounds),
                 child: Text(
-                  '${provider.stationNumber}站台看板',
+                  isDualStation
+                      ? '双站台看板 (3002 | 3003)'
+                      : '${ref.watch(dashboardProvider.select((p) => p.stationNumber))}站台看板',
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -100,13 +115,13 @@ class HeaderBar extends ConsumerWidget {
               bottom: 0,
               child: Row(
                 children: [
-                  // 站台选择器
-                  _buildStationSelector(context, ref, provider),
+                  // 站台选择器（只在单站台模式显示，或双站台模式也显示用于切换）
+                  _buildStationSelector(context, ref),
 
                   const SizedBox(width: 20),
 
                   // 连接状态指示器
-                  _buildConnectionStatus(ref),
+                  _buildConnectionStatus(connectionState, reconnectCount, ref),
 
                   const SizedBox(width: 20),
 
@@ -123,8 +138,8 @@ class HeaderBar extends ConsumerWidget {
 
   /// 站台选择器
   /// 对应 Vue 中的 station-switcher
-  Widget _buildStationSelector(
-      BuildContext context, WidgetRef ref, DashboardProvider provider) {
+  Widget _buildStationSelector(BuildContext context, WidgetRef ref) {
+    final provider = ref.watch(dashboardProvider);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -191,10 +206,8 @@ class HeaderBar extends ConsumerWidget {
 
   /// 连接状态指示器
   /// 支持 3 种状态：已连接（绿色）、重连中（橙色）、未连接（红色）
-  Widget _buildConnectionStatus(WidgetRef ref) {
-    final provider = ref.watch(dashboardProvider);
-    final connectionState = provider.connectionState;
-    final reconnectCount = provider.reconnectCount;
+  Widget _buildConnectionStatus(
+      HubConnectionState connectionState, int reconnectCount, WidgetRef ref) {
 
     // 根据连接状态确定颜色和文本
     Color statusColor;
@@ -222,7 +235,11 @@ class HeaderBar extends ConsumerWidget {
       onTap: () {
         // 只有在未连接或重连失败时才允许手动重连
         if (connectionState != HubConnectionState.Connected) {
-          provider.manualReconnect();
+          if (isDualStation) {
+            ref.read(dualStationProvider).manualReconnect();
+          } else {
+            ref.read(dashboardProvider).manualReconnect();
+          }
         }
       },
       child: Container(

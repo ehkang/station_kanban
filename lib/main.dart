@@ -5,7 +5,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:launch_at_startup/launch_at_startup.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io';
-import 'page/dashboard_page.dart';
+import 'page/main_router_page.dart';
 import 'utils/error_logger.dart';
 
 /// 应用入口
@@ -106,7 +106,7 @@ class MyApp extends StatelessWidget {
         ),
         fontFamily: 'sans-serif',
       ),
-      home: const DashboardPage(),
+      home: const MainRouterPage(),
     );
   }
 }

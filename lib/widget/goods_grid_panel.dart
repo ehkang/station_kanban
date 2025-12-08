@@ -18,6 +18,7 @@ class GoodsGridPanel extends ConsumerWidget {
     // 对应 Vue 版本中的 localGoods
     final currentGoods = provider.currentGoods;
     final currentContainer = provider.currentContainer;
+    final pickTaskMap = provider.pickTaskMap; // 🎯 获取拣货任务映射
 
     // 最多显示 10 个货物（5x2 网格）
     final displayGoods = currentGoods.take(10).toList();
@@ -53,7 +54,7 @@ class GoodsGridPanel extends ConsumerWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: _buildGoodsGrid(displayGoods, currentContainer),
+              child: _buildGoodsGrid(displayGoods, currentContainer, pickTaskMap),
             ),
           ),
         ],
@@ -162,7 +163,7 @@ class GoodsGridPanel extends ConsumerWidget {
   }
 
   /// 5x2 货物网格
-  Widget _buildGoodsGrid(List<Goods> goods, String containerCode) {
+  Widget _buildGoodsGrid(List<Goods> goods, String containerCode, Map<String, int> pickTaskMap) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cellWidth = (constraints.maxWidth - 32) / 5; // 5 列
@@ -179,7 +180,7 @@ class GoodsGridPanel extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: index < goods.length
-                          ? _buildGoodsCard(goods[index], index, containerCode)
+                          ? _buildGoodsCard(goods[index], index, containerCode, pickTaskMap)
                           : _buildEmptyCard(index),
                     ),
                   );
@@ -196,7 +197,7 @@ class GoodsGridPanel extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: index < goods.length
-                          ? _buildGoodsCard(goods[index], index, containerCode)
+                          ? _buildGoodsCard(goods[index], index, containerCode, pickTaskMap)
                           : _buildEmptyCard(index),
                     ),
                   );
@@ -210,7 +211,9 @@ class GoodsGridPanel extends ConsumerWidget {
   }
 
   /// 货物卡片
-  Widget _buildGoodsCard(Goods goods, int index, String containerCode) {
+  Widget _buildGoodsCard(Goods goods, int index, String containerCode, Map<String, int> pickTaskMap) {
+    // 🎯 获取拣货数量
+    final pickQuantity = pickTaskMap[goods.goodsCode];
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 300 + (index * 50)),
@@ -326,7 +329,7 @@ class GoodsGridPanel extends ConsumerWidget {
 
                         const SizedBox(height: 10),
 
-                        // 数量信息 - 更醒目的显示
+                        // 数量信息 - 普通显示库存，红色突出拣货
                         if (goods.quantity != null) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -334,31 +337,21 @@ class GoodsGridPanel extends ConsumerWidget {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.green.withOpacity(0.4),
-                                  Colors.green.withOpacity(0.3),
-                                ],
-                              ),
+                              color: Colors.white.withOpacity(0.1),  // ✅ 普通浅色背景
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                color: Colors.green.withOpacity(0.8),
-                                width: 1.5,
+                                color: Colors.white.withOpacity(0.3),  // ✅ 浅色边框
+                                width: 1,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.green.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  spreadRadius: 1,
-                                ),
-                              ],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
                               children: [
                                 Icon(
-                                  Icons.analytics_outlined,
-                                  color: Colors.greenAccent,
+                                  Icons.inventory_outlined,  // ✅ 库存图标
+                                  color: Colors.white70,  // ✅ 普通白色
                                   size: 16,
                                 ),
                                 const SizedBox(width: 6),
@@ -366,7 +359,7 @@ class GoodsGridPanel extends ConsumerWidget {
                                   child: Text(
                                     '${goods.quantity} ${goods.unit ?? ''}',
                                     style: const TextStyle(
-                                      color: Colors.greenAccent,
+                                      color: Colors.white,  // ✅ 普通白色
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 0.5,
@@ -374,6 +367,24 @@ class GoodsGridPanel extends ConsumerWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                // 🎯 拣货数量显示（统一红色，无异常判断）
+                                if (pickQuantity != null && pickQuantity > 0) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(
+                                    Icons.south,
+                                    color: Color(0xFFFF5252),  // ✅ 统一红色
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '$pickQuantity',
+                                    style: const TextStyle(
+                                      color: Color(0xFFFF5252),  // ✅ 统一红色
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

@@ -10,6 +10,7 @@ import '../model/container.dart' as model;
 import '../model/goods.dart';
 import '../service/signalr_service.dart';
 import '../utils/list_diff_updater.dart';
+import '../utils/pick_task_fetcher.dart';
 
 /// Dashboard 状态管理
 /// 对应 Vue 项目中的 wms.ts store
@@ -30,6 +31,7 @@ class DashboardProvider extends ChangeNotifier {
   String _stationName = '未知站台'; // 站台名称
   String _currentContainer = ''; // 当前站台上的容器编号
   final List<Goods> _currentGoods = []; // 当前容器的货物列表
+  final Map<String, int> _pickTaskMap = {}; // 拣货任务映射：goodsNo -> pickQuantity
 
   // 定时刷新相关
   Timer? _goodsRefreshTimer; // 货物数据定时刷新定时器
@@ -77,6 +79,7 @@ class DashboardProvider extends ChangeNotifier {
   String get stationName => _stationName;
   String get currentContainer => _currentContainer;
   List<Goods> get currentGoods => _currentGoods;
+  Map<String, int> get pickTaskMap => _pickTaskMap; // 拣货任务映射
 
   /// 获取站台编号（去除前缀，如 Tran3001 -> 3001）
   String get stationNumber {
@@ -514,10 +517,12 @@ class DashboardProvider extends ChangeNotifier {
 
   /// 获取容器货物信息
   /// 对应 Vue 中的 getGoods 和 getContainerGoods
+  /// 🎯 同时获取库存数据和拣货任务
   Future<void> _fetchGoods(String containerCode) async {
     if (containerCode.isEmpty || containerCode == '0') {
       _currentGoods.clear();
       _currentContainer = '';
+      _pickTaskMap.clear();
       notifyListeners();
       return;
     }
@@ -536,6 +541,8 @@ class DashboardProvider extends ChangeNotifier {
       final url = '/Inventory/container/$containerCode';
       final response = await dio.get(url);
 
+      bool hasGoodsChanges = false;
+
       if (response.data != null && response.data['errCode'] == 0) {
         final goodsList = response.data['data'] as List?;
 
@@ -545,24 +552,44 @@ class DashboardProvider extends ChangeNotifier {
               .toList();
 
           // 🎯 使用智能差异更新，避免不必要的重建
-          final hasChanges = ListDiffUpdater.updateGoodsList(_currentGoods, newGoods);
-
-          // 🎯 只有数据真正变化时才通知 UI 更新
-          if (hasChanges) {
-            notifyListeners();
-          }
+          hasGoodsChanges = ListDiffUpdater.updateGoodsList(_currentGoods, newGoods);
         } else {
           _currentGoods.clear();
-          notifyListeners();
+          hasGoodsChanges = true;
         }
       } else {
         _currentGoods.clear();
+        hasGoodsChanges = true;
+      }
+
+      // 🎯 同时获取拣货任务（使用同一个 Dio 实例）
+      final newPickTaskMap = await PickTaskFetcher.fetchPickTasks(dio, containerCode);
+
+      // 比较拣货任务是否变化
+      final hasPickTaskChanges = !_mapsEqual(_pickTaskMap, newPickTaskMap);
+
+      if (hasPickTaskChanges) {
+        _pickTaskMap.clear();
+        _pickTaskMap.addAll(newPickTaskMap);
+      }
+
+      // 🎯 只有数据真正变化时才通知 UI 更新
+      if (hasGoodsChanges || hasPickTaskChanges) {
         notifyListeners();
       }
     } catch (e) {
       _currentGoods.clear();
       notifyListeners();
     }
+  }
+
+  /// 比较两个 Map 是否相等
+  bool _mapsEqual(Map<String, int> a, Map<String, int> b) {
+    if (a.length != b.length) return false;
+    for (var key in a.keys) {
+      if (a[key] != b[key]) return false;
+    }
+    return true;
   }
 
   /// 启动货物数据定时刷新

@@ -15,6 +15,28 @@ class DualStationPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final provider = ref.watch(dualStationProvider);
 
+    // 🎯 为每个站台构建拣货任务映射
+    final pickTaskMap3002 = <String, int>{};
+    final pickTaskMap3003 = <String, int>{};
+
+    if (provider.container3002.isNotEmpty) {
+      for (var goods in provider.goods3002) {
+        final quantity = provider.getPickQuantity(provider.container3002, goods.goodsCode);
+        if (quantity != null) {
+          pickTaskMap3002[goods.goodsCode] = quantity;
+        }
+      }
+    }
+
+    if (provider.container3003.isNotEmpty) {
+      for (var goods in provider.goods3003) {
+        final quantity = provider.getPickQuantity(provider.container3003, goods.goodsCode);
+        if (quantity != null) {
+          pickTaskMap3003[goods.goodsCode] = quantity;
+        }
+      }
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF0a0e27), // 深蓝色背景
       body: Stack(
@@ -39,6 +61,7 @@ class DualStationPage extends ConsumerWidget {
                           stationId: 'Tran3002',
                           containerCode: provider.container3002,
                           goods: provider.goods3002,
+                          pickTaskMap: pickTaskMap3002,
                         ),
                       ),
 
@@ -64,6 +87,7 @@ class DualStationPage extends ConsumerWidget {
                           stationId: 'Tran3003',
                           containerCode: provider.container3003,
                           goods: provider.goods3003,
+                          pickTaskMap: pickTaskMap3003,
                         ),
                       ),
                     ],

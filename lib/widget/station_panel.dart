@@ -9,12 +9,14 @@ class StationPanel extends StatelessWidget {
   final String stationId;
   final String containerCode;
   final List<Goods> goods;
+  final Map<String, int> pickTaskMap; // 🎯 拣货任务映射
 
   const StationPanel({
     super.key,
     required this.stationId,
     required this.containerCode,
     required this.goods,
+    required this.pickTaskMap,
   });
 
   @override
@@ -179,7 +181,7 @@ class StationPanel extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: index < displayGoods.length
-                          ? _buildGoodsCard(displayGoods[index], index, containerCode)
+                          ? _buildGoodsCard(displayGoods[index], index, containerCode, pickTaskMap)
                           : _buildEmptyCard(index),
                     ),
                   );
@@ -196,7 +198,7 @@ class StationPanel extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: index < displayGoods.length
-                          ? _buildGoodsCard(displayGoods[index], index, containerCode)
+                          ? _buildGoodsCard(displayGoods[index], index, containerCode, pickTaskMap)
                           : _buildEmptyCard(index),
                     ),
                   );
@@ -210,7 +212,9 @@ class StationPanel extends StatelessWidget {
   }
 
   /// 货物卡片
-  Widget _buildGoodsCard(Goods goods, int index, String containerCode) {
+  Widget _buildGoodsCard(Goods goods, int index, String containerCode, Map<String, int> pickTaskMap) {
+    // 🎯 获取拣货数量
+    final pickQuantity = pickTaskMap[goods.goodsCode];
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 300 + (index * 50)),
@@ -321,7 +325,7 @@ class StationPanel extends StatelessWidget {
 
                     const SizedBox(height: 10),
 
-                    // 数量信息
+                    // 数量信息 - 普通显示库存，红色突出拣货
                     if (goods.quantity != null) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -329,31 +333,21 @@ class StationPanel extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.green.withOpacity(0.4),
-                              Colors.green.withOpacity(0.3),
-                            ],
-                          ),
+                          color: Colors.white.withOpacity(0.1),  // ✅ 普通浅色背景
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: Colors.green.withOpacity(0.8),
-                            width: 1.5,
+                            color: Colors.white.withOpacity(0.3),  // ✅ 浅色边框
+                            width: 1,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.green.withOpacity(0.3),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                          ],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
                           children: [
                             Icon(
-                              Icons.analytics_outlined,
-                              color: Colors.greenAccent,
+                              Icons.inventory_outlined,  // ✅ 库存图标
+                              color: Colors.white70,  // ✅ 普通白色
                               size: 16,
                             ),
                             const SizedBox(width: 6),
@@ -361,7 +355,7 @@ class StationPanel extends StatelessWidget {
                               child: Text(
                                 '${goods.quantity} ${goods.unit ?? ''}',
                                 style: const TextStyle(
-                                  color: Colors.greenAccent,
+                                  color: Colors.white,  // ✅ 普通白色
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 0.5,
@@ -369,6 +363,24 @@ class StationPanel extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            // 🎯 拣货数量显示（统一红色，无异常判断）
+                            if (pickQuantity != null && pickQuantity > 0) ...[
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.south,
+                                color: Color(0xFFFF5252),  // ✅ 统一红色
+                                size: 14,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '$pickQuantity',
+                                style: const TextStyle(
+                                  color: Color(0xFFFF5252),  // ✅ 统一红色
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

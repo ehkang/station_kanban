@@ -9,6 +9,7 @@ import '../model/container.dart' as model;
 import '../model/goods.dart';
 import '../service/signalr_service.dart';
 import '../utils/list_diff_updater.dart';
+import '../utils/pick_task_fetcher.dart';
 import 'dashboard_provider.dart';
 
 /// 双站台状态管理
@@ -22,6 +23,7 @@ class DualStationProvider extends ChangeNotifier {
   final Map<String, model.ContainerModel> _containers = {};
   final Map<String, String> _deviceTrayMap = {}; // deviceCode -> containerCode
   final List<String> _logs = [];
+  final Map<String, int> _pickTaskMap = {}; // 拣货任务映射（复合key）: "containerCode:goodsNo" -> pickQuantity
 
   // 站台3002的数据
   String _station3002Name = 'Tran3002';
@@ -66,6 +68,13 @@ class DualStationProvider extends ChangeNotifier {
   String get station3003Name => _station3003Name;
   String get container3003 => _container3003;
   List<Goods> get goods3003 => _goods3003;
+
+  /// 获取指定容器和货物的拣货数量
+  /// 参数：containerCode - 容器编码，goodsNo - 货物编码
+  /// 返回：拣货数量，如果没有拣货任务则返回 null
+  int? getPickQuantity(String containerCode, String goodsNo) {
+    return _pickTaskMap['$containerCode:$goodsNo'];
+  }
 
   /// 初始化 SignalR 连接
   /// 注意：连接状态由 DashboardProvider 统一管理，此处只订阅业务数据
@@ -379,6 +388,7 @@ class DualStationProvider extends ChangeNotifier {
   }
 
   /// 获取容器货物信息
+  /// 🎯 同时获取库存数据和拣货任务
   Future<void> _fetchGoods(String stationCode, String containerCode) async {
     if (containerCode.isEmpty || containerCode == '0') {
       return;
@@ -394,29 +404,48 @@ class DualStationProvider extends ChangeNotifier {
       final url = '/Inventory/container/$containerCode';
       final response = await dio.get(url);
 
+      bool hasGoodsChanges = false;
+
       if (response.data != null && response.data['errCode'] == 0) {
         final goodsList = response.data['data'] as List?;
 
         if (goodsList != null) {
           final newGoods = goodsList.map((item) => Goods.fromJson(item as Map<String, dynamic>)).toList();
 
-          bool hasChanges = false;
-
           if (stationCode == 'Tran3002') {
             _container3002 = containerCode;
             // 🎯 使用智能差异更新，避免不必要的重建
-            hasChanges = ListDiffUpdater.updateGoodsList(_goods3002, newGoods);
+            hasGoodsChanges = ListDiffUpdater.updateGoodsList(_goods3002, newGoods);
           } else if (stationCode == 'Tran3003') {
             _container3003 = containerCode;
             // 🎯 使用智能差异更新，避免不必要的重建
-            hasChanges = ListDiffUpdater.updateGoodsList(_goods3003, newGoods);
-          }
-
-          // 🎯 只有数据真正变化时才通知 UI 更新
-          if (hasChanges) {
-            notifyListeners();
+            hasGoodsChanges = ListDiffUpdater.updateGoodsList(_goods3003, newGoods);
           }
         }
+      }
+
+      // 🎯 同时获取拣货任务（使用同一个 Dio 实例）
+      final newPickTaskMap = await PickTaskFetcher.fetchPickTasks(dio, containerCode);
+
+      // 更新拣货任务到复合key Map中
+      bool hasPickTaskChanges = false;
+
+      // 先移除该容器的旧拣货任务
+      _pickTaskMap.removeWhere((key, value) => key.startsWith('$containerCode:'));
+
+      // 添加新的拣货任务
+      for (var entry in newPickTaskMap.entries) {
+        final compositeKey = '$containerCode:${entry.key}';
+        final oldValue = _pickTaskMap[compositeKey];
+        if (oldValue != entry.value) {
+          hasPickTaskChanges = true;
+        }
+        _pickTaskMap[compositeKey] = entry.value;
+      }
+
+      // 🎯 只有数据真正变化时才通知 UI 更新
+      if (hasGoodsChanges || hasPickTaskChanges) {
+        notifyListeners();
       }
     } catch (e) {
       print('获取货物信息失败: $e');

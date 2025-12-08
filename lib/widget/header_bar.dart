@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:signalr_netcore/signalr_client.dart';
 import '../provider/dashboard_provider.dart';
-import '../provider/dual_station_provider.dart';
 
 /// 顶部标题栏
 /// 对应 Vue 项目中的 header 部分
@@ -17,14 +16,15 @@ class HeaderBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 根据模式选择对应的 provider
-    final connectionState = isDualStation
-        ? ref.watch(dualStationProvider.select((p) => p.connectionState))
-        : ref.watch(dashboardProvider.select((p) => p.connectionState));
+    // 🎯 总是从 DashboardProvider 读取连接状态（单一数据源）
+    // DashboardProvider 不是 autoDispose，永远存活，状态永远正确
+    final connectionState = ref.watch(
+      dashboardProvider.select((p) => p.connectionState)
+    );
 
-    final reconnectCount = isDualStation
-        ? ref.watch(dualStationProvider.select((p) => p.reconnectCount))
-        : ref.watch(dashboardProvider.select((p) => p.reconnectCount));
+    final reconnectCount = ref.watch(
+      dashboardProvider.select((p) => p.reconnectCount)
+    );
 
     return Container(
       height: 80,
@@ -234,12 +234,9 @@ class HeaderBar extends ConsumerWidget {
     return GestureDetector(
       onTap: () {
         // 只有在未连接或重连失败时才允许手动重连
+        // 🎯 总是调用 DashboardProvider 的重连方法（单一数据源）
         if (connectionState != HubConnectionState.Connected) {
-          if (isDualStation) {
-            ref.read(dualStationProvider).manualReconnect();
-          } else {
-            ref.read(dashboardProvider).manualReconnect();
-          }
+          ref.read(dashboardProvider).manualReconnect();
         }
       },
       child: Container(

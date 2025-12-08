@@ -7,6 +7,17 @@ class SignalRService {
   HubConnection? _hubConnection;
   final String _hubUrl = 'http://10.20.88.14:8009/hubs/wcsHub';
 
+  // 🎯 连接状态标志，防止重复连接
+  bool _isConnected = false;
+  bool _isConnecting = false;
+
+  // 🎯 当前连接状态（唯一数据源）
+  HubConnectionState _currentConnectionState = HubConnectionState.Disconnected;
+
+  /// 获取当前连接状态
+  /// 注意：UI应该通过 DashboardProvider 订阅获得响应式更新
+  HubConnectionState get currentConnectionState => _currentConnectionState;
+
   /// 连接状态流
   final _connectionStateController = StreamController<HubConnectionState>.broadcast();
   Stream<HubConnectionState> get connectionState => _connectionStateController.stream;
@@ -27,6 +38,14 @@ class SignalRService {
 
   /// 初始化 SignalR 连接
   Future<void> connect() async {
+    // 🎯 防止重复连接
+    if (_isConnected || _isConnecting) {
+      print('SignalR 已连接或正在连接中，跳过重复连接');
+      return;
+    }
+
+    _isConnecting = true;
+
     // 创建连接
     _hubConnection = HubConnectionBuilder()
         .withUrl(_hubUrl)
@@ -38,19 +57,23 @@ class SignalRService {
     // 监听连接状态变化
     _hubConnection?.onclose(({error}) {
       print('SignalR 连接关闭: $error');
-      _connectionStateController.add(HubConnectionState.Disconnected);
+      _isConnected = false;
+      _currentConnectionState = HubConnectionState.Disconnected;  // 🎯 同步更新
+      _connectionStateController.add(_currentConnectionState);
     });
 
     _hubConnection?.onreconnecting(({error}) {
       _reconnectCount++;
       print('SignalR 重连中... (第 $_reconnectCount 次)');
+      _currentConnectionState = HubConnectionState.Reconnecting;  // 🎯 同步更新
       _reconnectCountController.add(_reconnectCount);
-      _connectionStateController.add(HubConnectionState.Reconnecting);
+      _connectionStateController.add(_currentConnectionState);
     });
 
     _hubConnection?.onreconnected(({connectionId}) {
       print('SignalR 重连成功: $connectionId (共重连 $_reconnectCount 次)');
-      _connectionStateController.add(HubConnectionState.Connected);
+      _currentConnectionState = HubConnectionState.Connected;  // 🎯 同步更新
+      _connectionStateController.add(_currentConnectionState);
       // 重连成功后，重置重连次数
       _reconnectCount = 0;
       _reconnectCountController.add(_reconnectCount);
@@ -67,11 +90,17 @@ class SignalRService {
     try {
       // 启动连接
       await _hubConnection?.start();
+      _isConnected = true;
+      _isConnecting = false;
+      _currentConnectionState = HubConnectionState.Connected;  // 🎯 同步更新
       print('SignalR 连接成功');
-      _connectionStateController.add(HubConnectionState.Connected);
+      _connectionStateController.add(_currentConnectionState);
     } catch (e) {
+      _isConnected = false;
+      _isConnecting = false;
+      _currentConnectionState = HubConnectionState.Disconnected;  // 🎯 同步更新
       print('SignalR 连接失败: $e');
-      _connectionStateController.add(HubConnectionState.Disconnected);
+      _connectionStateController.add(_currentConnectionState);
       rethrow;
     }
   }
@@ -111,7 +140,10 @@ class SignalRService {
   /// 断开连接
   Future<void> disconnect() async {
     await _hubConnection?.stop();
-    _connectionStateController.add(HubConnectionState.Disconnected);
+    _isConnected = false;
+    _isConnecting = false;
+    _currentConnectionState = HubConnectionState.Disconnected;  // 🎯 同步更新
+    _connectionStateController.add(_currentConnectionState);
   }
 
   /// 手动重连

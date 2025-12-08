@@ -35,6 +35,12 @@ class DashboardProvider extends ChangeNotifier {
   Timer? _goodsRefreshTimer; // 货物数据定时刷新定时器
   static const Duration _refreshInterval = Duration(seconds: 10); // 刷新间隔：10秒
 
+  // 🎯 Stream 订阅管理（防止内存泄漏和 dispose 后被调用）
+  StreamSubscription<HubConnectionState>? _connectionStateSubscription;
+  StreamSubscription<int>? _reconnectCountSubscription;
+  StreamSubscription<DeviceUpdateEvent>? _deviceUpdatesSubscription;
+  StreamSubscription<LogEvent>? _logsSubscription;
+
   // 日志配置：限制最大日志数量，防止内存暴增
   // 100条日志约占用 20-30KB 内存（每条平均100字符）
   static const int _maxLogCount = 100;
@@ -116,31 +122,31 @@ class DashboardProvider extends ChangeNotifier {
 
   /// 初始化 SignalR 连接
   void _initSignalR() {
-    // 监听连接状态
-    _signalRService.connectionState.listen((state) {
+    // 🎯 监听连接状态（保存订阅引用）
+    _connectionStateSubscription = _signalRService.connectionState.listen((state) {
       _connectionState = state;
       _isConnected = state == HubConnectionState.Connected;
       notifyListeners();
     });
 
-    // 监听重连次数
-    _signalRService.reconnectCount.listen((count) {
+    // 🎯 监听重连次数（保存订阅引用）
+    _reconnectCountSubscription = _signalRService.reconnectCount.listen((count) {
       _reconnectCount = count;
       notifyListeners();
     });
 
-    // 监听设备更新
-    _signalRService.deviceUpdates.listen((event) {
+    // 🎯 监听设备更新（保存订阅引用）
+    _deviceUpdatesSubscription = _signalRService.deviceUpdates.listen((event) {
       updateDevice(event.deviceNo, event.data);
     });
 
-    // 监听服务器推送的日志
+    // 🎯 监听服务器推送的日志（保存订阅引用）
     // 对应 Vue 项目中的: signalRConnection.on("logger", ...)
-    _signalRService.logs.listen((logEvent) {
+    _logsSubscription = _signalRService.logs.listen((logEvent) {
       _addLog(logEvent.message);
     });
 
-    // 启动连接
+    // 启动连接（SignalRService 内部已有防重复逻辑）
     _signalRService.connect();
   }
 
@@ -468,20 +474,28 @@ class DashboardProvider extends ChangeNotifier {
   /// 对应 Vue 中的 checkCurrentStationTray
   ///
   /// 📍 关键逻辑：
-  /// - 容器出现：立即获取货物 + 启动 10 秒定时刷新
+  /// - 容器出现：立即获取货物 + 启动 10 秒定时刷新（仅单站台模式）
   /// - 容器离开：停止定时刷新 + 清空数据
+  /// - 双站台模式：不启动定时器（由 DualStationProvider 专门管理）
   Future<void> _checkCurrentStationContainer() async {
+    // 🎯 判断是否为双站台模式（Tran3002 或 Tran3003）
+    // 双站台模式下，定时刷新由 DualStationProvider 管理，避免重复
+    final isDualStation = _selectedStation == 'Tran3002' || _selectedStation == 'Tran3003';
+
     // 从 deviceTrayMap 获取当前站台上的容器编号
     final containerCode = _deviceTrayMap[_selectedStation];
 
     if (containerCode != null && containerCode.isNotEmpty) {
       // 🎯 场景 1：容器出现或变化
       if (containerCode != _currentContainer) {
-        // 立即获取货物数据
+        // 立即获取货物数据（保持数据同步）
         await _fetchGoods(containerCode);
 
-        // 启动定时刷新（10 秒一次）
-        _startGoodsRefreshTimer(containerCode);
+        // 🎯 只在单站台模式下启动定时刷新
+        // 双站台模式由 DualStationProvider 管理，避免重复定时器
+        if (!isDualStation) {
+          _startGoodsRefreshTimer(containerCode);
+        }
       }
       // 🎯 场景 2：容器未变化（定时器会自动刷新，这里无需处理）
     } else {
@@ -599,6 +613,12 @@ class DashboardProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    // 🎯 取消所有 Stream 订阅（防止内存泄漏）
+    _connectionStateSubscription?.cancel();
+    _reconnectCountSubscription?.cancel();
+    _deviceUpdatesSubscription?.cancel();
+    _logsSubscription?.cancel();
+
     // 🎯 清理定时器
     _stopGoodsRefreshTimer();
 

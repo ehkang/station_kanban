@@ -22,9 +22,6 @@ class DualStationProvider extends ChangeNotifier {
   final Map<String, model.ContainerModel> _containers = {};
   final Map<String, String> _deviceTrayMap = {}; // deviceCode -> containerCode
   final List<String> _logs = [];
-  bool _isConnected = false;
-  HubConnectionState _connectionState = HubConnectionState.Disconnected;
-  int _reconnectCount = 0;
 
   // 站台3002的数据
   String _station3002Name = 'Tran3002';
@@ -41,6 +38,11 @@ class DualStationProvider extends ChangeNotifier {
   Timer? _refreshTimer3003; // 站台 3003 的定时刷新定时器
   static const Duration _refreshInterval = Duration(seconds: 10); // 刷新间隔：10秒
 
+  // 🎯 Stream 订阅管理（防止内存泄漏和 dispose 后被调用）
+  // 注意：连接状态由 DashboardProvider 统一管理，此处只订阅必要的业务数据
+  StreamSubscription<DeviceUpdateEvent>? _deviceUpdatesSubscription;
+  StreamSubscription<LogEvent>? _logsSubscription;
+
   // 日志限制
   static const int _maxLogCount = 100;
 
@@ -53,9 +55,7 @@ class DualStationProvider extends ChangeNotifier {
   Map<String, Device> get devices => _devices;
   Map<String, model.ContainerModel> get containers => _containers;
   List<String> get logs => _logs;
-  bool get isConnected => _isConnected;
-  HubConnectionState get connectionState => _connectionState;
-  int get reconnectCount => _reconnectCount;
+  // 注意：连接状态通过 DashboardProvider 统一提供，此处不再暴露
 
   // 站台3002
   String get station3002Name => _station3002Name;
@@ -68,38 +68,23 @@ class DualStationProvider extends ChangeNotifier {
   List<Goods> get goods3003 => _goods3003;
 
   /// 初始化 SignalR 连接
+  /// 注意：连接状态由 DashboardProvider 统一管理，此处只订阅业务数据
   void _initSignalR() {
-    // 监听连接状态
-    _signalRService.connectionState.listen((state) {
-      _connectionState = state;
-      _isConnected = state == HubConnectionState.Connected;
-      notifyListeners();
-    });
-
-    // 监听重连次数
-    _signalRService.reconnectCount.listen((count) {
-      _reconnectCount = count;
-      notifyListeners();
-    });
-
-    // 监听设备更新
-    _signalRService.deviceUpdates.listen((event) {
+    // 🎯 监听设备更新（保存订阅引用）
+    _deviceUpdatesSubscription = _signalRService.deviceUpdates.listen((event) {
       updateDevice(event.deviceNo, event.data);
     });
 
-    // 监听服务器推送的日志
-    _signalRService.logs.listen((logEvent) {
+    // 🎯 监听服务器推送的日志（保存订阅引用）
+    _logsSubscription = _signalRService.logs.listen((logEvent) {
       _addLog(logEvent.message);
     });
 
-    // 启动连接
+    // 启动连接（SignalRService 内部已有防重复逻辑）
     _signalRService.connect();
   }
 
-  /// 手动重连
-  Future<void> manualReconnect() async {
-    await _signalRService.reconnect();
-  }
+  // 注意：手动重连功能由 DashboardProvider 统一提供
 
   /// 更新设备数据
   void updateDevice(String deviceNo, Map<String, dynamic> newInfo) {
@@ -488,17 +473,22 @@ class DualStationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    // 🎯 取消业务数据订阅（防止 disposed 后被调用）
+    _deviceUpdatesSubscription?.cancel();
+    _logsSubscription?.cancel();
+
     // 🎯 清理所有定时器
     _stopRefreshTimer('Tran3002');
     _stopRefreshTimer('Tran3003');
 
-    // Note: 不要在这里 dispose signalRService，因为单站台可能还在使用
+    // Note: 不要在这里 dispose signalRService，因为 DashboardProvider 可能还在使用
     super.dispose();
   }
 }
 
 /// Provider 实例（与单站台共享 SignalRService）
-final dualStationProvider = ChangeNotifierProvider<DualStationProvider>((ref) {
+/// 🎯 使用 autoDispose 确保页面卸载时自动清理定时器
+final dualStationProvider = ChangeNotifierProvider.autoDispose<DualStationProvider>((ref) {
   // 复用单站台的 SignalRService
   final signalRService = ref.watch(signalRServiceProvider);
   return DualStationProvider(signalRService);

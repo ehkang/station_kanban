@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -7,6 +8,7 @@ import '../model/device.dart';
 import '../model/container.dart' as model;
 import '../model/goods.dart';
 import '../service/signalr_service.dart';
+import '../utils/list_diff_updater.dart';
 import 'dashboard_provider.dart';
 
 /// 双站台状态管理
@@ -33,6 +35,11 @@ class DualStationProvider extends ChangeNotifier {
   String _station3003Name = 'Tran3003';
   String _container3003 = '';
   final List<Goods> _goods3003 = [];
+
+  // 定时刷新相关
+  Timer? _refreshTimer3002; // 站台 3002 的定时刷新定时器
+  Timer? _refreshTimer3003; // 站台 3003 的定时刷新定时器
+  static const Duration _refreshInterval = Duration(seconds: 10); // 刷新间隔：10秒
 
   // 日志限制
   static const int _maxLogCount = 100;
@@ -338,29 +345,46 @@ class DualStationProvider extends ChangeNotifier {
   }
 
   /// 检查指定站台的容器和货物
+  ///
+  /// 📍 关键逻辑：
+  /// - 容器出现：立即获取货物 + 启动 10 秒定时刷新
+  /// - 容器离开：停止定时刷新 + 清空数据
   Future<void> _checkStationContainer(String stationCode) async {
     final containerCode = _deviceTrayMap[stationCode];
 
     if (containerCode != null && containerCode.isNotEmpty) {
+      // 🎯 场景 1：容器出现或变化
       if (stationCode == 'Tran3002') {
         if (containerCode != _container3002) {
+          // 立即获取货物数据
           await _fetchGoods(stationCode, containerCode);
+          // 启动定时刷新
+          _startRefreshTimer('Tran3002', containerCode);
         }
       } else if (stationCode == 'Tran3003') {
         if (containerCode != _container3003) {
+          // 立即获取货物数据
           await _fetchGoods(stationCode, containerCode);
+          // 启动定时刷新
+          _startRefreshTimer('Tran3003', containerCode);
         }
       }
     } else {
-      // 站台上没有容器，清空数据
+      // 🎯 场景 2：容器离开站台
       if (stationCode == 'Tran3002') {
         if (_container3002.isNotEmpty) {
+          // 停止定时刷新
+          _stopRefreshTimer('Tran3002');
+          // 清空数据
           _container3002 = '';
           _goods3002.clear();
           notifyListeners();
         }
       } else if (stationCode == 'Tran3003') {
         if (_container3003.isNotEmpty) {
+          // 停止定时刷新
+          _stopRefreshTimer('Tran3003');
+          // 清空数据
           _container3003 = '';
           _goods3003.clear();
           notifyListeners();
@@ -389,23 +413,63 @@ class DualStationProvider extends ChangeNotifier {
         final goodsList = response.data['data'] as List?;
 
         if (goodsList != null) {
-          final goods = goodsList.map((item) => Goods.fromJson(item as Map<String, dynamic>)).toList();
+          final newGoods = goodsList.map((item) => Goods.fromJson(item as Map<String, dynamic>)).toList();
+
+          bool hasChanges = false;
 
           if (stationCode == 'Tran3002') {
             _container3002 = containerCode;
-            _goods3002.clear();
-            _goods3002.addAll(goods);
+            // 🎯 使用智能差异更新，避免不必要的重建
+            hasChanges = ListDiffUpdater.updateGoodsList(_goods3002, newGoods);
           } else if (stationCode == 'Tran3003') {
             _container3003 = containerCode;
-            _goods3003.clear();
-            _goods3003.addAll(goods);
+            // 🎯 使用智能差异更新，避免不必要的重建
+            hasChanges = ListDiffUpdater.updateGoodsList(_goods3003, newGoods);
+          }
+
+          // 🎯 只有数据真正变化时才通知 UI 更新
+          if (hasChanges) {
+            notifyListeners();
           }
         }
       }
-
-      notifyListeners();
     } catch (e) {
       print('获取货物信息失败: $e');
+    }
+  }
+
+  /// 启动指定站台的定时刷新
+  ///
+  /// 📍 触发时机：容器出现在站台上时
+  /// 📍 刷新频率：每 10 秒一次
+  void _startRefreshTimer(String stationCode, String containerCode) {
+    // 先停止旧的定时器（如果存在）
+    _stopRefreshTimer(stationCode);
+
+    // 创建新的定时刷新定时器
+    final timer = Timer.periodic(_refreshInterval, (timer) {
+      // 定时刷新货物数据
+      _fetchGoods(stationCode, containerCode);
+    });
+
+    // 保存到对应的定时器字段
+    if (stationCode == 'Tran3002') {
+      _refreshTimer3002 = timer;
+    } else if (stationCode == 'Tran3003') {
+      _refreshTimer3003 = timer;
+    }
+  }
+
+  /// 停止指定站台的定时刷新
+  ///
+  /// 📍 触发时机：容器离开站台时、dispose 时
+  void _stopRefreshTimer(String stationCode) {
+    if (stationCode == 'Tran3002') {
+      _refreshTimer3002?.cancel();
+      _refreshTimer3002 = null;
+    } else if (stationCode == 'Tran3003') {
+      _refreshTimer3003?.cancel();
+      _refreshTimer3003 = null;
     }
   }
 
@@ -424,6 +488,10 @@ class DualStationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    // 🎯 清理所有定时器
+    _stopRefreshTimer('Tran3002');
+    _stopRefreshTimer('Tran3003');
+
     // Note: 不要在这里 dispose signalRService，因为单站台可能还在使用
     super.dispose();
   }

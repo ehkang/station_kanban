@@ -125,4 +125,29 @@ class Goods {
       'updateTime': updateTime?.toIso8601String(),
     };
   }
+
+  /// 判断两个货物数据是否相等（用于防闪烁的差异检测）
+  /// 比较所有影响显示的关键字段
+  bool isEqualTo(Goods other) {
+    return goodsCode == other.goodsCode &&
+        goodsName == other.goodsName &&
+        quantity == other.quantity &&
+        unit == other.unit &&
+        status == other.status &&
+        slotX == other.slotX &&
+        slotY == other.slotY &&
+        batchNo == other.batchNo;
+  }
+
+  /// 重写 == 运算符（基于 goodsCode 唯一标识）
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Goods &&
+          runtimeType == other.runtimeType &&
+          goodsCode == other.goodsCode;
+
+  /// 重写 hashCode（与 == 配套）
+  @override
+  int get hashCode => goodsCode.hashCode;
 }

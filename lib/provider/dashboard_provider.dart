@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -8,6 +9,7 @@ import '../model/device.dart';
 import '../model/container.dart' as model;
 import '../model/goods.dart';
 import '../service/signalr_service.dart';
+import '../utils/list_diff_updater.dart';
 
 /// Dashboard 状态管理
 /// 对应 Vue 项目中的 wms.ts store
@@ -28,6 +30,10 @@ class DashboardProvider extends ChangeNotifier {
   String _stationName = '未知站台'; // 站台名称
   String _currentContainer = ''; // 当前站台上的容器编号
   final List<Goods> _currentGoods = []; // 当前容器的货物列表
+
+  // 定时刷新相关
+  Timer? _goodsRefreshTimer; // 货物数据定时刷新定时器
+  static const Duration _refreshInterval = Duration(seconds: 10); // 刷新间隔：10秒
 
   // 日志配置：限制最大日志数量，防止内存暴增
   // 100条日志约占用 20-30KB 内存（每条平均100字符）
@@ -355,6 +361,9 @@ class DashboardProvider extends ChangeNotifier {
       _stationName = newStation;
     }
 
+    // 🎯 停止旧站台的定时刷新
+    _stopGoodsRefreshTimer();
+
     // 清空当前货物数据
     _currentContainer = '';
     _currentGoods.clear();
@@ -457,18 +466,31 @@ class DashboardProvider extends ChangeNotifier {
 
   /// 检查当前站台的容器和货物
   /// 对应 Vue 中的 checkCurrentStationTray
+  ///
+  /// 📍 关键逻辑：
+  /// - 容器出现：立即获取货物 + 启动 10 秒定时刷新
+  /// - 容器离开：停止定时刷新 + 清空数据
   Future<void> _checkCurrentStationContainer() async {
     // 从 deviceTrayMap 获取当前站台上的容器编号
     final containerCode = _deviceTrayMap[_selectedStation];
 
     if (containerCode != null && containerCode.isNotEmpty) {
-      // 如果容器编号变化了，重新获取货物
+      // 🎯 场景 1：容器出现或变化
       if (containerCode != _currentContainer) {
+        // 立即获取货物数据
         await _fetchGoods(containerCode);
+
+        // 启动定时刷新（10 秒一次）
+        _startGoodsRefreshTimer(containerCode);
       }
+      // 🎯 场景 2：容器未变化（定时器会自动刷新，这里无需处理）
     } else {
-      // 站台上没有容器，清空数据
+      // 🎯 场景 3：容器离开站台
       if (_currentContainer.isNotEmpty) {
+        // 停止定时刷新
+        _stopGoodsRefreshTimer();
+
+        // 清空数据
         _currentContainer = '';
         _currentGoods.clear();
         notifyListeners();
@@ -504,20 +526,52 @@ class DashboardProvider extends ChangeNotifier {
         final goodsList = response.data['data'] as List?;
 
         if (goodsList != null) {
+          final newGoods = goodsList
+              .map((item) => Goods.fromJson(item as Map<String, dynamic>))
+              .toList();
+
+          // 🎯 使用智能差异更新，避免不必要的重建
+          final hasChanges = ListDiffUpdater.updateGoodsList(_currentGoods, newGoods);
+
+          // 🎯 只有数据真正变化时才通知 UI 更新
+          if (hasChanges) {
+            notifyListeners();
+          }
+        } else {
           _currentGoods.clear();
-          _currentGoods.addAll(
-            goodsList.map((item) => Goods.fromJson(item as Map<String, dynamic>)),
-          );
+          notifyListeners();
         }
       } else {
         _currentGoods.clear();
+        notifyListeners();
       }
-
-      notifyListeners();
     } catch (e) {
       _currentGoods.clear();
       notifyListeners();
     }
+  }
+
+  /// 启动货物数据定时刷新
+  ///
+  /// 📍 触发时机：容器出现在站台上时
+  /// 📍 刷新频率：每 10 秒一次
+  void _startGoodsRefreshTimer(String containerCode) {
+    // 先停止旧的定时器（如果存在）
+    _stopGoodsRefreshTimer();
+
+    // 创建新的定时刷新定时器
+    _goodsRefreshTimer = Timer.periodic(_refreshInterval, (timer) {
+      // 定时刷新货物数据
+      _fetchGoods(containerCode);
+    });
+  }
+
+  /// 停止货物数据定时刷新
+  ///
+  /// 📍 触发时机：容器离开站台时、切换站台时、dispose 时
+  void _stopGoodsRefreshTimer() {
+    _goodsRefreshTimer?.cancel();
+    _goodsRefreshTimer = null;
   }
 
   /// 添加日志（仅用于接收服务器推送的日志）
@@ -545,6 +599,9 @@ class DashboardProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    // 🎯 清理定时器
+    _stopGoodsRefreshTimer();
+
     _signalRService.dispose();
     super.dispose();
   }

@@ -27,7 +27,7 @@ class HeaderBar extends ConsumerWidget {
     );
 
     return Container(
-      height: 80,
+      height: 70,  // 🎨 黄金比例优化：80→70
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -57,8 +57,8 @@ class HeaderBar extends ConsumerWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 50,
-                    height: 50,
+                    width: 48,  // 🎨 黄金比例优化：50→48
+                    height: 48,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
@@ -78,7 +78,7 @@ class HeaderBar extends ConsumerWidget {
                     child: const Icon(
                       Icons.warehouse,
                       color: Colors.white,
-                      size: 28,
+                      size: 26,  // 🎨 黄金比例优化：28→26
                     ),
                   ),
                 ],
@@ -99,7 +99,7 @@ class HeaderBar extends ConsumerWidget {
                       ? '双站台看板 (3002 | 3003)'
                       : '${ref.watch(dashboardProvider.select((p) => p.stationNumber))}站台看板',
                   style: const TextStyle(
-                    fontSize: 32,
+                    fontSize: 36,  // 🎨 黄金比例优化：32→36 (h1级别)
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     letterSpacing: 2,
@@ -322,7 +322,7 @@ class HeaderBar extends ConsumerWidget {
               timeStr,
               style: const TextStyle(
                 color: Colors.cyan,
-                fontSize: 24,
+                fontSize: 28,  // 🎨 黄金比例优化：24→28
                 fontWeight: FontWeight.bold,
                 fontFamily: 'monospace',
               ),

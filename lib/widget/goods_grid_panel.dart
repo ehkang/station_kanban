@@ -65,8 +65,8 @@ class GoodsGridPanel extends ConsumerWidget {
   /// 面板标题
   Widget _buildPanelHeader(int count, String containerCode) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      height: 80, // 给 Stack 一个固定高度，增加以容纳容器编码显示
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),  // 🎨 黄金比例优化
+      height: 60,  // 🎨 黄金比例优化：80→60
       child: Stack(
         children: [
           // 左侧：货物展示标签
@@ -86,7 +86,7 @@ class GoodsGridPanel extends ConsumerWidget {
                   '货物展示',
                   style: TextStyle(
                     color: Colors.cyan,
-                    fontSize: 18,
+                    fontSize: 16,  // 🎨 黄金比例优化：18→16 (h3级别)
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -98,7 +98,7 @@ class GoodsGridPanel extends ConsumerWidget {
           if (containerCode.isNotEmpty)
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),  // 🎨 黄金比例优化：弱化显示
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -116,7 +116,7 @@ class GoodsGridPanel extends ConsumerWidget {
                   '容器: $containerCode',
                   style: const TextStyle(
                     color: Colors.orange,
-                    fontSize: 18,
+                    fontSize: 16,  // 🎨 黄金比例优化：18→16 (h3级别)
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1,
                   ),

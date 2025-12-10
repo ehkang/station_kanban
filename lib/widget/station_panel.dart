@@ -164,19 +164,24 @@ class StationPanel extends StatelessWidget {
     );
   }
 
-  /// 货物网格（5x2）
+  /// 货物网格（5xN 自适应，1-3行）
   Widget _buildGoodsGrid() {
-    final displayGoods = goods.take(10).toList();
+    final displayGoods = goods.take(15).toList();
+
+    // 🎯 动态计算行数
+    // 1-5个货物：1行
+    // 6-10个货物：2行
+    // 11-15个货物：3行
+    final rowCount = displayGoods.isEmpty ? 1 : (displayGoods.length / 5.0).ceil();
 
     return LayoutBuilder(
       builder: (context, constraints) {
         return Column(
-          children: [
-            // 第一行
-            Expanded(
+          children: List.generate(rowCount, (row) {
+            return Expanded(
               child: Row(
                 children: List.generate(5, (col) {
-                  final index = col;
+                  final index = row * 5 + col;
                   return Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
@@ -187,25 +192,8 @@ class StationPanel extends StatelessWidget {
                   );
                 }),
               ),
-            ),
-
-            // 第二行
-            Expanded(
-              child: Row(
-                children: List.generate(5, (col) {
-                  final index = col + 5;
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: index < displayGoods.length
-                          ? _buildGoodsCard(displayGoods[index], index, containerCode, pickTaskMap)
-                          : _buildEmptyCard(index),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ],
+            );
+          }),
         );
       },
     );

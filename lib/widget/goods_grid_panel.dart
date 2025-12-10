@@ -20,8 +20,8 @@ class GoodsGridPanel extends ConsumerWidget {
     final currentContainer = provider.currentContainer;
     final pickTaskMap = provider.pickTaskMap; // 🎯 获取拣货任务映射
 
-    // 最多显示 10 个货物（5x2 网格）
-    final displayGoods = currentGoods.take(10).toList();
+    // 最多显示 15 个货物（5xN 自适应网格，最多3行）
+    final displayGoods = currentGoods.take(15).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -132,7 +132,7 @@ class GoodsGridPanel extends ConsumerWidget {
             child: Row(
               children: [
                 Text(
-                  '5 × 2',
+                  '5 × N',
                   style: TextStyle(
                     color: Colors.cyan.withOpacity(0.7),
                     fontSize: 14,
@@ -146,7 +146,7 @@ class GoodsGridPanel extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '$count / 10',
+                    '$count / 15',
                     style: const TextStyle(
                       color: Colors.cyan,
                       fontSize: 16,
@@ -162,20 +162,22 @@ class GoodsGridPanel extends ConsumerWidget {
     );
   }
 
-  /// 5x2 货物网格
+  /// 5xN 自适应货物网格（1-3行）
   Widget _buildGoodsGrid(List<Goods> goods, String containerCode, Map<String, int> pickTaskMap) {
+    // 🎯 动态计算行数
+    // 1-5个货物：1行
+    // 6-10个货物：2行
+    // 11-15个货物：3行
+    final rowCount = goods.isEmpty ? 1 : (goods.length / 5.0).ceil();
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cellWidth = (constraints.maxWidth - 32) / 5; // 5 列
-        final cellHeight = (constraints.maxHeight - 8) / 2; // 2 行
-
         return Column(
-          children: [
-            // 第一行
-            Expanded(
+          children: List.generate(rowCount, (row) {
+            return Expanded(
               child: Row(
                 children: List.generate(5, (col) {
-                  final index = col;
+                  final index = row * 5 + col;
                   return Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
@@ -186,25 +188,8 @@ class GoodsGridPanel extends ConsumerWidget {
                   );
                 }),
               ),
-            ),
-
-            // 第二行
-            Expanded(
-              child: Row(
-                children: List.generate(5, (col) {
-                  final index = col + 5;
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: index < goods.length
-                          ? _buildGoodsCard(goods[index], index, containerCode, pickTaskMap)
-                          : _buildEmptyCard(index),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ],
+            );
+          }),
         );
       },
     );

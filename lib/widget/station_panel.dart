@@ -270,14 +270,31 @@ class StationPanel extends StatelessWidget {
                   ],
                 ),
 
-                // 中间：3D模型展示区域
+                // 中间：3D模型展示区域（动态计算合理尺寸）
                 Expanded(
-                  child: Center(
-                    child: Cube3DViewer(
-                      key: ValueKey('$containerCode-${goods.goodsCode}'),
-                      stlUrl: 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=${goods.goodsCode}',
-                      initDelay: index * 200,
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final availableWidth = constraints.maxWidth;
+                      final availableHeight = constraints.maxHeight;
+
+                      // 🎨 限制最大高度为宽度的1.5倍，避免竖长变形
+                      final maxHeight = availableWidth * 1.5;
+                      final actualHeight = availableHeight > maxHeight
+                          ? maxHeight
+                          : availableHeight;
+
+                      return Center(
+                        child: SizedBox(
+                          width: availableWidth,
+                          height: actualHeight,
+                          child: Cube3DViewer(
+                            key: ValueKey('$containerCode-${goods.goodsCode}'),
+                            stlUrl: 'https://aio.wxnanxing.com/api/Tech/Pdm/GetConvertFile?GoodsNo=${goods.goodsCode}',
+                            initDelay: index * 200,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
 

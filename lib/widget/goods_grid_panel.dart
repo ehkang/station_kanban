@@ -275,10 +275,27 @@ class GoodsGridPanel extends ConsumerWidget {
                       ],
                     ),
 
-                    // 中间：3D模型展示区域（用Expanded让它占据剩余空间）
+                    // 中间：3D模型展示区域（动态计算合理尺寸）
                     Expanded(
-                      child: Center(
-                        child: _build3DModelOrIcon(goods, index, containerCode),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final availableWidth = constraints.maxWidth;
+                          final availableHeight = constraints.maxHeight;
+
+                          // 🎨 限制最大高度为宽度的1.5倍，避免竖长变形
+                          final maxHeight = availableWidth * 1.5;
+                          final actualHeight = availableHeight > maxHeight
+                              ? maxHeight
+                              : availableHeight;
+
+                          return Center(
+                            child: SizedBox(
+                              width: availableWidth,
+                              height: actualHeight,
+                              child: _build3DModelOrIcon(goods, index, containerCode),
+                            ),
+                          );
+                        },
                       ),
                     ),
 

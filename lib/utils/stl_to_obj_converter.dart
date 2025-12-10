@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:math';  // 🎨 用于平滑着色的法向量归一化
 
 /// STL 转 OBJ 转换器
 ///
@@ -176,7 +177,7 @@ class StlToObjConverter {
     return _generateObjString(vertices, normals, faces, optimize: optimize);
   }
 
-  /// 生成 OBJ 格式字符串
+  /// 生成 OBJ 格式字符串（强制使用平滑着色）
   static String _generateObjString(
     List<_Vertex> vertices,
     List<_Vector3> normals,
@@ -212,17 +213,18 @@ class StlToObjConverter {
         obj.writeln('v ${v.x.toStringAsFixed(6)} ${v.y.toStringAsFixed(6)} ${v.z.toStringAsFixed(6)}');
       }
 
-      // 写入法向量
+      // 🎨 计算并写入顶点平滑法向量（强制平滑着色）
       obj.writeln();
-      for (final n in normals) {
+      final vertexNormals = _calculateVertexNormals(uniqueVertices.length, newFaces, normals);
+
+      for (final n in vertexNormals) {
         obj.writeln('vn ${n.x.toStringAsFixed(6)} ${n.y.toStringAsFixed(6)} ${n.z.toStringAsFixed(6)}');
       }
 
-      // 写入面
+      // 写入面（每个顶点使用自己的法向量索引）
       obj.writeln();
       for (final face in newFaces) {
-        final normalIndex = face.normalIndex + 1;
-        obj.writeln('f ${face.v1}//${normalIndex} ${face.v2}//${normalIndex} ${face.v3}//${normalIndex}');
+        obj.writeln('f ${face.v1}//${face.v1} ${face.v2}//${face.v2} ${face.v3}//${face.v3}');
       }
     } else {
       // 不优化：直接输出
@@ -261,6 +263,71 @@ class StlToObjConverter {
       vertexMap[key] = index;
       return index;
     }
+  }
+
+  /// 🎨 计算顶点平滑法向量（Smooth Shading）
+  ///
+  /// 对于每个顶点，计算所有关联三角形法向量的平均值
+  /// 这样可以消除三角网格的明暗分界线，实现平滑的光照效果
+  ///
+  /// [vertexCount] 顶点数量
+  /// [faces] 面列表
+  /// [faceNormals] 面法向量列表
+  /// 返回每个顶点的平滑法向量
+  static List<_Vector3> _calculateVertexNormals(
+    int vertexCount,
+    List<_Face> faces,
+    List<_Vector3> faceNormals,
+  ) {
+    // 为每个顶点收集所有关联的三角形法向量
+    final vertexNormalLists = List<List<_Vector3>>.generate(
+      vertexCount,
+      (_) => [],
+    );
+
+    // 遍历所有三角形，将法向量添加到顶点列表中
+    for (final face in faces) {
+      final normal = faceNormals[face.normalIndex];
+
+      // 顶点索引从1开始，列表索引从0开始
+      vertexNormalLists[face.v1 - 1].add(normal);
+      vertexNormalLists[face.v2 - 1].add(normal);
+      vertexNormalLists[face.v3 - 1].add(normal);
+    }
+
+    // 计算每个顶点的平均法向量并归一化
+    final smoothNormals = <_Vector3>[];
+
+    for (final normalList in vertexNormalLists) {
+      if (normalList.isEmpty) {
+        // 没有关联法向量，使用默认值（指向Z轴）
+        smoothNormals.add(_Vector3(0, 0, 1));
+        continue;
+      }
+
+      // 计算平均值
+      double sumX = 0, sumY = 0, sumZ = 0;
+      for (final n in normalList) {
+        sumX += n.x;
+        sumY += n.y;
+        sumZ += n.z;
+      }
+
+      // 归一化（单位化）
+      final length = sqrt(sumX * sumX + sumY * sumY + sumZ * sumZ);
+      if (length > 0.0001) {
+        smoothNormals.add(_Vector3(
+          sumX / length,
+          sumY / length,
+          sumZ / length,
+        ));
+      } else {
+        // 法向量过小（几乎为零），使用默认值
+        smoothNormals.add(_Vector3(0, 0, 1));
+      }
+    }
+
+    return smoothNormals;
   }
 }
 

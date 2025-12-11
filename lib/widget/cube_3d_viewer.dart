@@ -141,7 +141,7 @@ class _Cube3DViewerState extends State<Cube3DViewer>
       final stlBytes = Uint8List.fromList(response.data!);
       final fileSizeKB = (stlBytes.length / 1024).toStringAsFixed(2);
 
-      // 2. 转换 STL → OBJ（启用去重以消除Z-fighting黑线）
+      // 2. 转换 STL → OBJ（启用去重实现Smooth Shading消除黑线，所有面保留）
       final objString = StlToObjConverter.convert(stlBytes, optimize: true);
 
       // 3. 解析 OBJ 为 Mesh
@@ -458,23 +458,23 @@ class _Cube3DViewerState extends State<Cube3DViewer>
     // 设置相机
     scene.camera.position.z = 10;
 
-    // 设置光照 - 柔和均匀的照明，减少阴影和黑线
+    // 设置光照 - 自然明亮的照明
     scene.light.position.setFrom(Vector3(10, 10, 10));
     scene.light.setColor(
       const Color(0xFFFFFFFF),  // 纯白光
-      0.6,   // ambient: 60% 环境光（提高整体亮度，减少深色阴影）
-      0.8,   // diffuse: 80% 漫反射光（降低对比度，柔和过渡）
-      0.5,   // specular: 50% 高光（适度金属反射，避免过强高光）
+      0.6,   // ambient: 60% 环境光（提高整体亮度）
+      0.8,   // diffuse: 80% 漫反射光（主要光照）
+      0.5,   // specular: 50% 高光（适度金属反射）
     );
 
     // 添加对象到场景
     if (_object != null) {
-      // 浅色不锈钢材质：银白色金属质感
+      // 不锈钢材质：自然的金属质感
       // Vector3(R, G, B) 范围 0.0-1.0
-      _object!.mesh.material.ambient = Vector3.all(0.7);   // 高亮度环境光（70% 银白色）
-      _object!.mesh.material.diffuse = Vector3.all(0.95);  // 高亮度漫反射（95% 银白色）
-      _object!.mesh.material.specular = Vector3.all(1.0);  // 纯白高光（金属质感）
-      _object!.mesh.material.shininess = 80.0;             // 高光泽度（不锈钢效果）
+      _object!.mesh.material.ambient = Vector3.all(0.7);   // 70% 环境光
+      _object!.mesh.material.diffuse = Vector3.all(0.85);  // 85% 漫反射
+      _object!.mesh.material.specular = Vector3.all(0.6);  // 60% 高光
+      _object!.mesh.material.shininess = 40.0;             // 40 光泽度（自然金属）
 
       scene.world.add(_object!);
     }

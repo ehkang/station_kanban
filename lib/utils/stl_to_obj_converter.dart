@@ -284,7 +284,7 @@ class StlToObjConverter {
     obj.writeln();
 
     if (optimize) {
-      // 优化：去重顶点
+      // 🔧 去重顶点（只合并位置相同的顶点，保留所有面）
       final uniqueVertices = <_Vertex>[];
       final vertexMap = <String, int>{};
       final newFaces = <_Face>[];
@@ -299,6 +299,18 @@ class StlToObjConverter {
         final i3 = _getOrAddVertex(v3, uniqueVertices, vertexMap);
 
         newFaces.add(_Face(i1, i2, i3, face.normalIndex));
+      }
+
+      // 🔍 验证：证明去重不减少面数
+      print('📊 [顶点去重统计]');
+      print('   去重前顶点: ${vertices.length}');
+      print('   去重后顶点: ${uniqueVertices.length} (减少 ${((1 - uniqueVertices.length / vertices.length) * 100).toStringAsFixed(1)}%)');
+      print('   去重前面数: ${faces.length}');
+      print('   去重后面数: ${newFaces.length}');
+      if (faces.length == newFaces.length) {
+        print('   ✅ 所有${faces.length}个面完全保留，无丢失');
+      } else {
+        print('   ❌ 警告: 面数不匹配！');
       }
 
       // 写入顶点

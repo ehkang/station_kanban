@@ -141,7 +141,7 @@ class _Cube3DViewerState extends State<Cube3DViewer>
       final stlBytes = Uint8List.fromList(response.data!);
       final fileSizeKB = (stlBytes.length / 1024).toStringAsFixed(2);
 
-      // 2. 转换 STL → OBJ
+      // 2. 转换 STL → OBJ（启用去重以消除Z-fighting黑线）
       final objString = StlToObjConverter.convert(stlBytes, optimize: true);
 
       // 3. 解析 OBJ 为 Mesh
@@ -325,40 +325,80 @@ class _Cube3DViewerState extends State<Cube3DViewer>
 
     final lines = objString.split('\n');
 
+    // 🔍 诊断统计
+    int vCount = 0, vnCount = 0, fCount = 0;
+    int parseErrorCount = 0;
+    int outOfRangeCount = 0;
+
     for (final line in lines) {
       final trimmed = line.trim();
       if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
 
       final parts = trimmed.split(RegExp(r'\s+'));
 
-      if (parts[0] == 'v') {
-        // 顶点
-        vertices.add(Vector3(
-          double.parse(parts[1]),
-          double.parse(parts[2]),
-          double.parse(parts[3]),
-        ));
-      } else if (parts[0] == 'vn') {
-        // 法向量
-        normals.add(Vector3(
-          double.parse(parts[1]),
-          double.parse(parts[2]),
-          double.parse(parts[3]),
-        ));
-      } else if (parts[0] == 'f') {
-        // 面（三角形）
-        // 格式: f v1//vn1 v2//vn2 v3//vn3
-        final v1 = _parseFaceVertex(parts[1]);
-        final v2 = _parseFaceVertex(parts[2]);
-        final v3 = _parseFaceVertex(parts[3]);
+      try {
+        if (parts[0] == 'v') {
+          // 顶点
+          if (parts.length >= 4) {
+            vertices.add(Vector3(
+              double.parse(parts[1]),
+              double.parse(parts[2]),
+              double.parse(parts[3]),
+            ));
+            vCount++;
+          }
+        } else if (parts[0] == 'vn') {
+          // 法向量
+          if (parts.length >= 4) {
+            normals.add(Vector3(
+              double.parse(parts[1]),
+              double.parse(parts[2]),
+              double.parse(parts[3]),
+            ));
+            vnCount++;
+          }
+        } else if (parts[0] == 'f') {
+          // 面（三角形）
+          // 格式: f v1//vn1 v2//vn2 v3//vn3
+          if (parts.length >= 4) {
+            final v1 = _parseFaceVertex(parts[1]);
+            final v2 = _parseFaceVertex(parts[2]);
+            final v3 = _parseFaceVertex(parts[3]);
 
-        indices.add(Polygon(v1, v2, v3));
+            // 🔍 验证索引范围
+            if (v1 >= 0 && v1 < vertices.length &&
+                v2 >= 0 && v2 < vertices.length &&
+                v3 >= 0 && v3 < vertices.length) {
+              indices.add(Polygon(v1, v2, v3));
+              fCount++;
+            } else {
+              outOfRangeCount++;
+              print('⚠️  警告: 面索引超出范围 f $v1 $v2 $v3 (顶点总数: ${vertices.length})');
+            }
+          }
+        }
+      } catch (e) {
+        parseErrorCount++;
+        // 静默跳过，不中断解析
       }
+    }
+
+    // 🔍 输出诊断日志
+    print('📊 [OBJ解析] 统计:');
+    print('   顶点(v): $vCount');
+    print('   法向量(vn): $vnCount');
+    print('   面(f): $fCount');
+    if (parseErrorCount > 0) {
+      print('   ❌ 解析错误: $parseErrorCount 行');
+    }
+    if (outOfRangeCount > 0) {
+      print('   ❌ 索引超范围: $outOfRangeCount 个面');
     }
 
     // 自动缩放和居中
     if (vertices.isNotEmpty) {
       _normalizeVertices(vertices);
+      print('   ✅ 顶点归一化完成 (目标尺寸: 5.0)');
     }
 
     return Mesh(
@@ -418,13 +458,13 @@ class _Cube3DViewerState extends State<Cube3DViewer>
     // 设置相机
     scene.camera.position.z = 10;
 
-    // 设置光照（增强亮度）- 更亮的白光
+    // 设置光照 - 柔和均匀的照明，减少阴影和黑线
     scene.light.position.setFrom(Vector3(10, 10, 10));
     scene.light.setColor(
       const Color(0xFFFFFFFF),  // 纯白光
-      0.4,   // ambient: 40% 环境光（提高整体亮度）
-      1.0,   // diffuse: 100% 漫反射光（最强）
-      0.9,   // specular: 90% 高光（强金属反射）
+      0.6,   // ambient: 60% 环境光（提高整体亮度，减少深色阴影）
+      0.8,   // diffuse: 80% 漫反射光（降低对比度，柔和过渡）
+      0.5,   // specular: 50% 高光（适度金属反射，避免过强高光）
     );
 
     // 添加对象到场景

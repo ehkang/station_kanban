@@ -79,6 +79,12 @@ class StlToObjConverter {
 
     int offset = 84; // 头部(80) + 三角形数量(4)
 
+    // 🔍 诊断统计
+    int validCount = 0;
+    int degenerateCount = 0;
+    int zeroNormalCount = 0;
+    int nanCount = 0;
+
     for (int i = 0; i < triangleCount; i++) {
       // 法向量 (3 * 4 bytes)
       final nx = buffer.getFloat32(offset, Endian.little);
@@ -111,13 +117,44 @@ class StlToObjConverter {
       // 属性字节计数 (2 bytes)
       offset += 2;
 
+      // 🔍 验证：检查NaN和Infinity
+      if (_hasInvalidNumber(v1) || _hasInvalidNumber(v2) || _hasInvalidNumber(v3)) {
+        nanCount++;
+        continue; // 跳过包含无效数值的三角形
+      }
+
+      // 🔍 验证：检查零法向量
+      if (nx == 0 && ny == 0 && nz == 0) {
+        zeroNormalCount++;
+        // 零法向量可能是有效的（让渲染器自动计算），所以不跳过
+      }
+
+      // 🔍 验证：检查退化三角形（顶点重合或共线）
+      if (_isDegenerate(v1, v2, v3)) {
+        degenerateCount++;
+        continue; // 跳过退化三角形
+      }
+
       // 添加到列表
+      validCount++;
+      final vertexBaseIndex = vertices.length;
       vertices.addAll([v1, v2, v3]);
       normals.add(_Vector3(nx, ny, nz));
 
       // 面索引（从1开始）
-      final baseIndex = i * 3 + 1;
-      faces.add(_Face(baseIndex, baseIndex + 1, baseIndex + 2, i));
+      final baseIndex = vertexBaseIndex + 1;
+      faces.add(_Face(baseIndex, baseIndex + 1, baseIndex + 2, normals.length - 1));
+    }
+
+    // 🔍 输出诊断日志
+    print('📊 [STL Binary] 三角形统计:');
+    print('   总数: $triangleCount');
+    print('   ✅ 有效: $validCount');
+    print('   ⚠️  退化: $degenerateCount (顶点重合/共线)');
+    print('   ⚠️  零法向量: $zeroNormalCount');
+    print('   ❌ 无效数值: $nanCount (NaN/Infinity)');
+    if (validCount < triangleCount) {
+      print('   ⚠️  警告: 丢失了 ${triangleCount - validCount} 个三角形');
     }
 
     return _generateObjString(vertices, normals, faces, optimize: optimize);
@@ -136,6 +173,13 @@ class StlToObjConverter {
     final triangleVertices = <_Vertex>[];
     int triangleCount = 0;
 
+    // 🔍 诊断统计
+    int validCount = 0;
+    int degenerateCount = 0;
+    int incompleteCount = 0;
+    int parseErrorCount = 0;
+    int zeroNormalCount = 0;
+
     for (final line in lines) {
       final trimmed = line.trim();
 
@@ -143,35 +187,84 @@ class StlToObjConverter {
         // 解析法向量
         final parts = trimmed.split(RegExp(r'\s+'));
         if (parts.length >= 5) {
-          currentNormal = _Vector3(
-            double.parse(parts[2]),
-            double.parse(parts[3]),
-            double.parse(parts[4]),
-          );
+          try {
+            currentNormal = _Vector3(
+              double.parse(parts[2]),
+              double.parse(parts[3]),
+              double.parse(parts[4]),
+            );
+
+            // 🔍 检查零法向量
+            if (currentNormal.x == 0 && currentNormal.y == 0 && currentNormal.z == 0) {
+              zeroNormalCount++;
+            }
+          } catch (e) {
+            parseErrorCount++;
+            currentNormal = null;
+          }
         }
       } else if (trimmed.startsWith('vertex')) {
         // 解析顶点
         final parts = trimmed.split(RegExp(r'\s+'));
         if (parts.length >= 4) {
-          triangleVertices.add(_Vertex(
-            double.parse(parts[1]),
-            double.parse(parts[2]),
-            double.parse(parts[3]),
-          ));
+          try {
+            final vertex = _Vertex(
+              double.parse(parts[1]),
+              double.parse(parts[2]),
+              double.parse(parts[3]),
+            );
+
+            // 🔍 检查无效数值
+            if (!_hasInvalidNumber(vertex)) {
+              triangleVertices.add(vertex);
+            } else {
+              parseErrorCount++;
+            }
+          } catch (e) {
+            parseErrorCount++;
+          }
         }
       } else if (trimmed.startsWith('endfacet')) {
+        triangleCount++;
+
         // 三角形完成
         if (triangleVertices.length == 3 && currentNormal != null) {
-          vertices.addAll(triangleVertices);
-          normals.add(currentNormal);
+          final v1 = triangleVertices[0];
+          final v2 = triangleVertices[1];
+          final v3 = triangleVertices[2];
 
-          final baseIndex = triangleCount * 3 + 1;
-          faces.add(_Face(baseIndex, baseIndex + 1, baseIndex + 2, triangleCount));
+          // 🔍 检查退化三角形
+          if (_isDegenerate(v1, v2, v3)) {
+            degenerateCount++;
+          } else {
+            validCount++;
+            final vertexBaseIndex = vertices.length;
+            vertices.addAll(triangleVertices);
+            normals.add(currentNormal);
 
-          triangleCount++;
-          triangleVertices.clear();
+            final baseIndex = vertexBaseIndex + 1;
+            faces.add(_Face(baseIndex, baseIndex + 1, baseIndex + 2, normals.length - 1));
+          }
+        } else {
+          // 三角形不完整（顶点数!=3或法向量缺失）
+          incompleteCount++;
         }
+
+        triangleVertices.clear();
+        currentNormal = null;
       }
+    }
+
+    // 🔍 输出诊断日志
+    print('📊 [STL ASCII] 三角形统计:');
+    print('   总数: $triangleCount');
+    print('   ✅ 有效: $validCount');
+    print('   ⚠️  退化: $degenerateCount (顶点重合/共线)');
+    print('   ⚠️  不完整: $incompleteCount (顶点数!=3或缺法向量)');
+    print('   ⚠️  零法向量: $zeroNormalCount');
+    print('   ❌ 解析错误: $parseErrorCount');
+    if (validCount < triangleCount) {
+      print('   ⚠️  警告: 丢失了 ${triangleCount - validCount} 个三角形');
     }
 
     return _generateObjString(vertices, normals, faces, optimize: optimize);
@@ -253,7 +346,8 @@ class StlToObjConverter {
     List<_Vertex> uniqueVertices,
     Map<String, int> vertexMap,
   ) {
-    final key = '${vertex.x.toStringAsFixed(6)}_${vertex.y.toStringAsFixed(6)}_${vertex.z.toStringAsFixed(6)}';
+    // 🔧 提高精度到7位小数以匹配float32精度，减少误合并
+    final key = '${vertex.x.toStringAsFixed(7)}_${vertex.y.toStringAsFixed(7)}_${vertex.z.toStringAsFixed(7)}';
 
     if (vertexMap.containsKey(key)) {
       return vertexMap[key]!;
@@ -348,4 +442,53 @@ class _Face {
   final int v1, v2, v3; // 顶点索引（从1开始）
   final int normalIndex; // 法向量索引（从0开始）
   _Face(this.v1, this.v2, this.v3, this.normalIndex);
+}
+
+/// 🔍 检查顶点是否包含无效数值（NaN或Infinity）
+bool _hasInvalidNumber(_Vertex v) {
+  return v.x.isNaN || v.x.isInfinite ||
+         v.y.isNaN || v.y.isInfinite ||
+         v.z.isNaN || v.z.isInfinite;
+}
+
+/// 🔍 检查三角形是否退化（顶点重合或共线）
+bool _isDegenerate(_Vertex v1, _Vertex v2, _Vertex v3) {
+  const tolerance = 1e-7; // 容差
+
+  // 检查顶点是否重合
+  final d12 = _distance(v1, v2);
+  final d23 = _distance(v2, v3);
+  final d31 = _distance(v3, v1);
+
+  if (d12 < tolerance || d23 < tolerance || d31 < tolerance) {
+    return true; // 至少有两个顶点重合
+  }
+
+  // 检查三个顶点是否共线（叉积长度接近0）
+  // 向量 v1→v2 和 v1→v3 的叉积
+  final edge1X = v2.x - v1.x;
+  final edge1Y = v2.y - v1.y;
+  final edge1Z = v2.z - v1.z;
+
+  final edge2X = v3.x - v1.x;
+  final edge2Y = v3.y - v1.y;
+  final edge2Z = v3.z - v1.z;
+
+  // 叉积: edge1 × edge2
+  final crossX = edge1Y * edge2Z - edge1Z * edge2Y;
+  final crossY = edge1Z * edge2X - edge1X * edge2Z;
+  final crossZ = edge1X * edge2Y - edge1Y * edge2X;
+
+  // 叉积的长度（三角形面积的2倍）
+  final crossLength = sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ);
+
+  return crossLength < tolerance; // 面积接近0，三点共线
+}
+
+/// 🔍 计算两个顶点之间的距离
+double _distance(_Vertex v1, _Vertex v2) {
+  final dx = v1.x - v2.x;
+  final dy = v1.y - v2.y;
+  final dz = v1.z - v2.z;
+  return sqrt(dx * dx + dy * dy + dz * dz);
 }
